@@ -227,12 +227,17 @@ async function main() {
 
   if (wantsChat) {
     // VS Code keeps the API key in secret storage, so this last step cannot be scripted.
+    // Always print the key: the clipboard is invisible state and is easily clobbered.
     const copied = copyToClipboard(apiKey);
     note(
       [
+        `Your API key${copied ? ' (also copied to your clipboard)' : ''}:`,
+        '',
+        `  ${apiKey}`,
+        '',
         `1. Run "Chat: Manage Language Models" from the Command Palette.`,
         `2. Pick the "${GROUP_NAME}" group (vendor: Custom Endpoint).`,
-        `3. Paste your API key${copied ? ' — already on your clipboard' : `: ${apiKey}`}.`,
+        `3. Paste the key above.`,
         '',
         `Then pick "${MODEL_NAME}" in the Chat model picker.`,
       ].join('\n'),
