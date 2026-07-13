@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 
 import { cancel, confirm, intro, isCancel, log, note, outro, select, spinner, text } from '@clack/prompts';
@@ -6,6 +7,9 @@ import { cancel, confirm, intro, isCancel, log, note, outro, select, spinner, te
 import { buildConfig, configPath, writeConfig, MODEL_NAME } from '../src/continue-config.js';
 import { EXTENSION_ID, VSCODE_DOWNLOAD_URL, detectEditors, installExtension, isExtensionInstalled } from '../src/editor.js';
 import { DEFAULT_GATEWAY, DEFAULT_INVITE, checkHealth, isValidEmail, register } from '../src/gateway.js';
+import { GROUP_NAME, byokConfigPath, writeByokConfig } from '../src/vscode-byok.js';
+
+const TARGETS = ['chat', 'continue', 'both'];
 
 const HELP = `
   deepvariance-vscode — set up ${MODEL_NAME} in VS Code
@@ -15,11 +19,13 @@ const HELP = `
 
   Options
     --health             Only check that the gateway is up, then exit
+    --target <where>     chat | continue | both  (default: ask)
+                           chat     — VS Code's built-in Chat (no extension needed)
+                           continue — the Continue extension
     --email <email>      Your email address
     --invite <token>     Override the built-in tester invite token
     --gateway <url>      Gateway URL (default: ${DEFAULT_GATEWAY})
-    --skip-extension     Don't install the Continue extension
-    --yes                Don't ask for confirmation before overwriting config.yaml
+    --yes                Don't ask for confirmation before writing config
     --help               Show this message
 
   Environment
@@ -29,10 +35,10 @@ const HELP = `
 const { values } = parseArgs({
   options: {
     health: { type: 'boolean', default: false },
+    target: { type: 'string' },
     email: { type: 'string' },
     invite: { type: 'string' },
     gateway: { type: 'string' },
-    'skip-extension': { type: 'boolean', default: false },
     yes: { type: 'boolean', default: false },
     help: { type: 'boolean', default: false },
   },
@@ -44,6 +50,11 @@ if (values.help) {
   process.exit(0);
 }
 
+if (values.target && !TARGETS.includes(values.target)) {
+  console.error(`--target must be one of: ${TARGETS.join(', ')}`);
+  process.exit(1);
+}
+
 /** Any cancelled prompt (Ctrl+C) exits cleanly rather than continuing with undefined. */
 function required(value) {
   if (isCancel(value)) {
@@ -51,6 +62,14 @@ function required(value) {
     process.exit(0);
   }
   return value;
+}
+
+/** Best-effort: the one manual step is pasting the key, so put it on the clipboard. */
+function copyToClipboard(text) {
+  const command =
+    process.platform === 'darwin' ? ['pbcopy', []] : process.platform === 'win32' ? ['clip', []] : ['xclip', ['-selection', 'clipboard']];
+  const result = spawnSync(command[0], command[1], { input: text, stdio: ['pipe', 'ignore', 'ignore'], shell: process.platform === 'win32' });
+  return result.status === 0;
 }
 
 /** Nothing below this is worth doing against a gateway that cannot answer. */
@@ -85,27 +104,39 @@ async function main() {
     process.exit(1);
   }
 
-  // Step 2 — the Continue extension.
-  const editors = detectEditors();
-  let editor = null;
+  const target = required(
+    values.target ??
+      (await select({
+        message: 'Where should the model be set up?',
+        options: [
+          { value: 'chat', label: "VS Code's built-in Chat", hint: 'no extension needed' },
+          { value: 'continue', label: 'The Continue extension', hint: 'installs Continue' },
+          { value: 'both', label: 'Both' },
+        ],
+      })),
+  );
 
-  if (values['skip-extension']) {
-    log.info('Skipping extension install (--skip-extension).');
-  } else if (editors.length === 0) {
-    log.warn(`No VS Code install found. Install it from ${VSCODE_DOWNLOAD_URL}, then install the "Continue" extension by hand.`);
-  } else if (editors.length === 1) {
-    editor = editors[0];
-  } else {
-    const choice = required(
-      await select({
-        message: 'Which editor should the Continue extension go into?',
-        options: editors.map((e) => ({ value: e, label: e.name, hint: e.bin })),
-      }),
-    );
-    editor = choice;
+  const wantsChat = target === 'chat' || target === 'both';
+  const wantsContinue = target === 'continue' || target === 'both';
+
+  // Continue is a real extension that has to be installed; built-in Chat is not.
+  let editor = null;
+  if (wantsContinue) {
+    const editors = detectEditors();
+    if (editors.length === 0) {
+      log.warn(`No VS Code install found. Install it from ${VSCODE_DOWNLOAD_URL}, then install the "Continue" extension by hand.`);
+    } else if (editors.length === 1) {
+      editor = editors[0];
+    } else {
+      editor = required(
+        await select({
+          message: 'Which editor should the Continue extension go into?',
+          options: editors.map((e) => ({ value: e, label: e.name, hint: e.bin })),
+        }),
+      );
+    }
   }
 
-  // Step 3 — trade the invite token for a personal API key.
   const email = required(
     values.email ??
       process.env.DEEPVARIANCE_EMAIL ??
@@ -114,7 +145,7 @@ async function main() {
         placeholder: 'you@example.com',
         validate: (value) => (isValidEmail(value) ? undefined : 'That does not look like an email address.'),
       })),
-  );
+  ).trim();
 
   if (!isValidEmail(email)) {
     cancel(`"${email}" does not look like an email address.`);
@@ -124,12 +155,22 @@ async function main() {
   // Testers share one invite, so we ship it and only ask for what is actually personal.
   const invite = values.invite ?? process.env.DEEPVARIANCE_INVITE ?? DEFAULT_INVITE;
 
+  if (!values.yes) {
+    const proceed = required(
+      await confirm({ message: `Create your API key and write the config? Any existing config is backed up first.` }),
+    );
+    if (!proceed) {
+      cancel('Setup cancelled. Nothing was changed.');
+      process.exit(0);
+    }
+  }
+
   const s = spinner();
 
   s.start('Creating your personal API key');
   let apiKey;
   try {
-    const result = await register({ gateway, email: email.trim(), invite: invite.trim() });
+    const result = await register({ gateway, email, invite: invite.trim() });
     apiKey = result.apiKey;
     // Every call mints a fresh key — created_user only says whether the account was new.
     // Keys accumulate rather than rotate, so any key you already use stays valid.
@@ -141,62 +182,66 @@ async function main() {
   }
 
   if (!apiKey.startsWith('sk-wh-')) {
-    log.warn(`The gateway returned a key that does not start with "sk-wh-". Using it anyway.`);
+    log.warn('The gateway returned a key that does not start with "sk-wh-". Using it anyway.');
   }
 
-  // Step 2, continued — install the extension now that we know registration worked.
-  if (editor) {
-    s.start(`Installing the Continue extension into ${editor.name}`);
+  if (wantsChat) {
+    s.start("Registering the model with VS Code's built-in Chat");
     try {
-      if (isExtensionInstalled(editor.bin)) {
-        s.stop(`Continue is already installed in ${editor.name}`);
-      } else {
-        installExtension(editor.bin);
-        s.stop(`Installed Continue into ${editor.name}`);
-      }
+      const written = await writeByokConfig({ gateway, email });
+      s.stop(written.unchanged ? 'VS Code Chat already configured' : `Wrote ${written.path}`);
+      if (written.backup) log.info(`Your previous language-model config was saved to ${written.backup}`);
     } catch (error) {
-      s.stop('Could not install the Continue extension', 1);
-      log.warn(`${error.message}\nInstall "${EXTENSION_ID}" from the Extensions panel by hand — the config below is still written.`);
+      s.stop('Could not configure VS Code Chat', 1);
+      log.warn(error.message);
     }
   }
 
-  // Steps 4 and 5 — write the config Continue reads.
-  const path = configPath();
+  if (wantsContinue) {
+    if (editor) {
+      s.start(`Installing the Continue extension into ${editor.name}`);
+      try {
+        if (isExtensionInstalled(editor.bin)) {
+          s.stop(`Continue is already installed in ${editor.name}`);
+        } else {
+          installExtension(editor.bin);
+          s.stop(`Installed Continue into ${editor.name}`);
+        }
+      } catch (error) {
+        s.stop('Could not install the Continue extension', 1);
+        log.warn(`${error.message}\nInstall "${EXTENSION_ID}" from the Extensions panel by hand.`);
+      }
+    }
 
-  if (!values.yes) {
-    const proceed = required(
-      await confirm({
-        message: `Write ${MODEL_NAME} to ${path}? Any existing config is backed up first.`,
-      }),
+    s.start('Writing Continue configuration');
+    try {
+      const written = await writeConfig({ apiKey, gateway, email, path: configPath() });
+      s.stop(written.unchanged ? 'Continue already up to date' : `Wrote ${written.path}`);
+      if (written.backup) log.info(`Your previous Continue config was saved to ${written.backup}`);
+    } catch (error) {
+      s.stop('Could not write the Continue configuration', 1);
+      log.warn(`${error.message}\n\nPaste this into ${configPath()} yourself:\n\n${buildConfig({ apiKey, gateway, email })}`);
+    }
+  }
+
+  if (wantsChat) {
+    // VS Code keeps the API key in secret storage, so this last step cannot be scripted.
+    const copied = copyToClipboard(apiKey);
+    note(
+      [
+        `1. Run "Chat: Manage Language Models" from the Command Palette.`,
+        `2. Pick the "${GROUP_NAME}" group (vendor: Custom Endpoint).`,
+        `3. Paste your API key${copied ? ' — already on your clipboard' : `: ${apiKey}`}.`,
+        '',
+        `Then pick "${MODEL_NAME}" in the Chat model picker.`,
+      ].join('\n'),
+      'One manual step — VS Code stores keys in its secret store',
     );
-    if (!proceed) {
-      note(buildConfig({ apiKey, gateway, email }), `Nothing written. Paste this into ${path} yourself:`);
-      outro('Done.');
-      return;
-    }
   }
 
-  s.start('Writing Continue configuration');
-  let written;
-  try {
-    written = await writeConfig({ apiKey, gateway, email, path });
-  } catch (error) {
-    s.stop('Could not write the configuration', 1);
-    cancel(`${error.message}\n\nPaste this into ${path} yourself:\n\n${buildConfig({ apiKey, gateway, email })}`);
-    process.exit(1);
+  if (wantsContinue && !wantsChat) {
+    note(`Open the Continue panel and pick "${MODEL_NAME}".`, 'You are set');
   }
-
-  s.stop(written.unchanged ? 'Configuration already up to date' : `Wrote ${written.path}`);
-  if (written.backup) log.info(`Your previous config was saved to ${written.backup}`);
-
-  note(
-    [
-      'Open the Continue panel in the sidebar.',
-      `Pick "${MODEL_NAME}" as the model.`,
-      'Ask it something — it reads code and images.',
-    ].join('\n'),
-    'You are set',
-  );
 
   outro('Happy coding!');
 }
