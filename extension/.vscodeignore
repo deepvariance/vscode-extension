@@ -4,3 +4,4 @@ esbuild.mjs
 node_modules/**
 **/*.map
 **/*.vsix
+dist/test-entry.cjs

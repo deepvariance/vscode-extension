@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 
 import { normalizeGateway } from '../../src/gateway.js';
-import { CONTEXT_WINDOW, MAX_OUTPUT_TOKENS, MODEL_ID, MODEL_NAME } from './constants.js';
+import { CONTEXT_WINDOW, MAX_OUTPUT_TOKENS, MODEL_FAMILY, MODEL_ID, MODEL_NAME } from './constants.js';
 
 const ROLE_USER = vscode.LanguageModelChatMessageRole.User;
 
@@ -126,7 +126,7 @@ export class DeepVarianceProvider {
       {
         id: MODEL_ID,
         name: MODEL_NAME,
-        family: 'qwen',
+        family: MODEL_FAMILY,
         version: '1.0.0',
         maxInputTokens: CONTEXT_WINDOW - MAX_OUTPUT_TOKENS,
         maxOutputTokens: MAX_OUTPUT_TOKENS,
@@ -179,6 +179,13 @@ export class DeepVarianceProvider {
       for await (const event of streamEvents(response.body)) {
         const delta = event.choices?.[0]?.delta;
         if (!delta) continue;
+
+        // This model streams its chain of thought in `reasoning`, separate from `content`.
+        // LanguageModelThinkingPart is a proposed API: if it isn't enabled, drop the thinking
+        // rather than dumping it into the answer as plain text.
+        if (delta.reasoning && vscode.LanguageModelThinkingPart) {
+          progress.report(new vscode.LanguageModelThinkingPart(delta.reasoning, event.id));
+        }
 
         if (delta.content) progress.report(new vscode.LanguageModelTextPart(delta.content));
 

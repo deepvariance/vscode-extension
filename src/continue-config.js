@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 
 import { normalizeGateway } from './gateway.js';
 
-export const MODEL_NAME = 'Qwen3-VL Coder';
+export const MODEL_NAME = 'Qwen3.5 27B';
 
 /**
  * `qwen-coder` is a gateway-side alias, not the underlying model id — the gateway currently

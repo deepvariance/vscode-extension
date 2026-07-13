@@ -6,10 +6,12 @@ import { cancel, confirm, intro, isCancel, log, note, outro, select, spinner, te
 import { buildConfig, configPath, writeConfig, MODEL_NAME } from '../src/continue-config.js';
 import { EXTENSION_ID, VSCODE_DOWNLOAD_URL, detectEditors, installExtension, installVsix, isExtensionInstalled, vsixPath } from '../src/editor.js';
 import { DEFAULT_GATEWAY, DEFAULT_INVITE, checkHealth, isValidEmail, register } from '../src/gateway.js';
+import { enableProposedApi } from '../src/argv.js';
 import { writeHandoff } from '../src/handoff.js';
 import { removeStaleGroup } from '../src/vscode-byok.js';
 
 const TARGETS = ['chat', 'continue', 'both'];
+const PROVIDER_EXTENSION_ID = 'deepvariance.deepvariance-vscode';
 
 const HELP = `
   deepvariance-vscode — set up ${MODEL_NAME} in VS Code
@@ -190,6 +192,11 @@ async function main() {
         installVsix(chatEditor.bin, vsixPath());
         await writeHandoff({ apiKey, gateway, email });
         s.stop(`Installed the Deep Variance provider into ${chatEditor.name}`);
+
+        // Showing the model's chain of thought needs a proposed API, which VS Code only grants
+        // to an extension named in argv.json. Takes effect on a full restart.
+        const argv = await enableProposedApi({ extensionId: PROVIDER_EXTENSION_ID });
+        if (argv.changed) log.info(`Enabled the thinking view for ${MODEL_NAME} (${argv.path})`);
       } catch (error) {
         s.stop('Could not install the Deep Variance provider', 1);
         log.warn(error.message);
@@ -229,7 +236,7 @@ async function main() {
   }
 
   const next = [];
-  if (wantsChat) next.push(`Reload VS Code, then pick "${MODEL_NAME}" in the Chat model picker.`);
+  if (wantsChat) next.push(`Quit and reopen VS Code, then pick "${MODEL_NAME}" in the Chat model picker.`);
   if (wantsContinue) next.push(`Open the Continue panel and pick "${MODEL_NAME}".`);
   note(next.join('\n'), 'You are set — no key to paste');
 
