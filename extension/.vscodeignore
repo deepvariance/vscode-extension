@@ -1,0 +1,6 @@
+src/**
+test/**
+esbuild.mjs
+node_modules/**
+**/*.map
+**/*.vsix

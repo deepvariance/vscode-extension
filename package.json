@@ -8,11 +8,13 @@
   },
   "files": [
     "bin",
-    "src"
+    "src",
+    "extension/*.vsix"
   ],
   "scripts": {
     "test": "node --test test/*.test.js",
-    "start": "node bin/cli.js"
+    "start": "node bin/cli.js",
+    "build:extension": "cd extension && npm install && npm run package"
   },
   "engines": {
     "node": ">=18"

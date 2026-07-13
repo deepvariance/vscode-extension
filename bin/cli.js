@@ -1,13 +1,13 @@
 #!/usr/bin/env node
-import { spawnSync } from 'node:child_process';
 import { parseArgs } from 'node:util';
 
 import { cancel, confirm, intro, isCancel, log, note, outro, select, spinner, text } from '@clack/prompts';
 
 import { buildConfig, configPath, writeConfig, MODEL_NAME } from '../src/continue-config.js';
-import { EXTENSION_ID, VSCODE_DOWNLOAD_URL, detectEditors, installExtension, isExtensionInstalled } from '../src/editor.js';
+import { EXTENSION_ID, VSCODE_DOWNLOAD_URL, detectEditors, installExtension, installVsix, isExtensionInstalled, vsixPath } from '../src/editor.js';
 import { DEFAULT_GATEWAY, DEFAULT_INVITE, checkHealth, isValidEmail, register } from '../src/gateway.js';
-import { GROUP_NAME, byokConfigPath, writeByokConfig } from '../src/vscode-byok.js';
+import { writeHandoff } from '../src/handoff.js';
+import { removeStaleGroup } from '../src/vscode-byok.js';
 
 const TARGETS = ['chat', 'continue', 'both'];
 
@@ -20,7 +20,7 @@ const HELP = `
   Options
     --health             Only check that the gateway is up, then exit
     --target <where>     chat | continue | both  (default: ask)
-                           chat     — VS Code's built-in Chat (no extension needed)
+                           chat     — VS Code's built-in Chat (installs our provider)
                            continue — the Continue extension
     --email <email>      Your email address
     --invite <token>     Override the built-in tester invite token
@@ -62,14 +62,6 @@ function required(value) {
     process.exit(0);
   }
   return value;
-}
-
-/** Best-effort: the one manual step is pasting the key, so put it on the clipboard. */
-function copyToClipboard(text) {
-  const command =
-    process.platform === 'darwin' ? ['pbcopy', []] : process.platform === 'win32' ? ['clip', []] : ['xclip', ['-selection', 'clipboard']];
-  const result = spawnSync(command[0], command[1], { input: text, stdio: ['pipe', 'ignore', 'ignore'], shell: process.platform === 'win32' });
-  return result.status === 0;
 }
 
 /** Nothing below this is worth doing against a gateway that cannot answer. */
@@ -119,19 +111,19 @@ async function main() {
   const wantsChat = target === 'chat' || target === 'both';
   const wantsContinue = target === 'continue' || target === 'both';
 
-  // Continue is a real extension that has to be installed; built-in Chat is not.
+  // Both targets install something now: the provider extension, or Continue.
   let editor = null;
-  if (wantsContinue) {
+  {
     const editors = detectEditors();
     if (editors.length === 0) {
-      log.warn(`No VS Code install found. Install it from ${VSCODE_DOWNLOAD_URL}, then install the "Continue" extension by hand.`);
+      // handled per-target below
     } else if (editors.length === 1 || values.yes) {
       // --yes means ask nothing: take the first match (VS Code before its forks).
       editor = editors[0];
     } else {
       editor = required(
         await select({
-          message: 'Which editor should the Continue extension go into?',
+          message: 'Which editor should it be installed into?',
           options: editors.map((e) => ({ value: e, label: e.name, hint: e.bin })),
         }),
       );
@@ -158,7 +150,7 @@ async function main() {
 
   if (!values.yes) {
     const proceed = required(
-      await confirm({ message: `Create your API key and write the config? Any existing config is backed up first.` }),
+      await confirm({ message: 'Create your API key and configure VS Code? Any existing config is backed up first.' }),
     );
     if (!proceed) {
       cancel('Setup cancelled. Nothing was changed.');
@@ -187,14 +179,25 @@ async function main() {
   }
 
   if (wantsChat) {
-    s.start("Registering the model with VS Code's built-in Chat");
-    try {
-      const written = await writeByokConfig({ gateway, email });
-      s.stop(written.unchanged ? 'VS Code Chat already configured' : `Wrote ${written.path}`);
-      if (written.backup) log.info(`Your previous language-model config was saved to ${written.backup}`);
-    } catch (error) {
-      s.stop('Could not configure VS Code Chat', 1);
-      log.warn(error.message);
+    const chatEditor = editor;
+    if (!chatEditor) {
+      log.warn(`No VS Code install found. Install it from ${VSCODE_DOWNLOAD_URL}, then re-run.`);
+    } else {
+      s.start(`Adding ${MODEL_NAME} to ${chatEditor.name}'s Chat`);
+      try {
+        // The extension IS the model provider, so it stays installed. Only the key handoff
+        // is transient: the extension moves it into SecretStorage and deletes the file.
+        installVsix(chatEditor.bin, vsixPath());
+        await writeHandoff({ apiKey, gateway, email });
+        s.stop(`Installed the Deep Variance provider into ${chatEditor.name}`);
+      } catch (error) {
+        s.stop('Could not install the Deep Variance provider', 1);
+        log.warn(error.message);
+      }
+
+      // An older run may have left a keyless BYOK group that shows a broken duplicate model.
+      const stale = await removeStaleGroup();
+      if (stale.removed) log.info('Removed the old key-pasting setup from chatLanguageModels.json');
     }
   }
 
@@ -225,29 +228,10 @@ async function main() {
     }
   }
 
-  if (wantsChat) {
-    // VS Code keeps the API key in secret storage, so this last step cannot be scripted.
-    // Always print the key: the clipboard is invisible state and is easily clobbered.
-    const copied = copyToClipboard(apiKey);
-    note(
-      [
-        `Your API key${copied ? ' (also copied to your clipboard)' : ''}:`,
-        '',
-        `  ${apiKey}`,
-        '',
-        `1. Run "Chat: Manage Language Models" from the Command Palette.`,
-        `2. Pick the "${GROUP_NAME}" group (vendor: Custom Endpoint).`,
-        `3. Paste the key above.`,
-        '',
-        `Then pick "${MODEL_NAME}" in the Chat model picker.`,
-      ].join('\n'),
-      'One manual step — VS Code stores keys in its secret store',
-    );
-  }
-
-  if (wantsContinue && !wantsChat) {
-    note(`Open the Continue panel and pick "${MODEL_NAME}".`, 'You are set');
-  }
+  const next = [];
+  if (wantsChat) next.push(`Reload VS Code, then pick "${MODEL_NAME}" in the Chat model picker.`);
+  if (wantsContinue) next.push(`Open the Continue panel and pick "${MODEL_NAME}".`);
+  note(next.join('\n'), 'You are set — no key to paste');
 
   outro('Happy coding!');
 }

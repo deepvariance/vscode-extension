@@ -1,0 +1,49 @@
+{
+  "name": "deepvariance-vscode",
+  "displayName": "Deep Variance — Qwen3-VL Coder",
+  "description": "Adds Qwen3-VL Coder to VS Code's Chat model picker.",
+  "version": "0.2.0",
+  "publisher": "deepvariance",
+  "license": "UNLICENSED",
+  "engines": {
+    "vscode": "^1.104.0"
+  },
+  "categories": [
+    "AI",
+    "Chat"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "languageModelChatProviders": [
+      {
+        "vendor": "deepvariance",
+        "displayName": "Deep Variance"
+      }
+    ],
+    "commands": [
+      {
+        "command": "deepvariance.setup",
+        "title": "Set Up Qwen3-VL Coder",
+        "category": "Deep Variance"
+      },
+      {
+        "command": "deepvariance.signOut",
+        "title": "Remove API Key",
+        "category": "Deep Variance"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "test": "node --test test/*.test.js",
+    "package": "npm run build && vsce package --allow-missing-repository --skip-license"
+  },
+  "devDependencies": {
+    "@types/vscode": "^1.104.0",
+    "@vscode/vsce": "^3.2.0",
+    "esbuild": "^0.24.0"
+  }
+}

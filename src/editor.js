@@ -1,6 +1,8 @@
 import { spawnSync } from 'node:child_process';
+import { readdirSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const EXTENSION_ID = 'Continue.continue';
 
@@ -66,6 +68,23 @@ export function installExtension(bin, extensionId = EXTENSION_ID) {
   if (result.status !== 0) {
     const reason = (result.stderr || result.stdout || result.error?.message || '').trim();
     throw new Error(`\`${bin} --install-extension ${extensionId}\` failed. ${reason}`);
+  }
+  return (result.stdout || '').trim();
+}
+
+/** The provider extension ships inside this npm package rather than a marketplace. */
+export function vsixPath() {
+  const here = dirname(fileURLToPath(import.meta.url));
+  const candidates = readdirSync(join(here, '..', 'extension')).filter((file) => file.endsWith('.vsix'));
+  if (candidates.length === 0) throw new Error('No .vsix found in this package — run `npm run build:extension` first.');
+  return join(here, '..', 'extension', candidates.sort().at(-1));
+}
+
+export function installVsix(bin, path) {
+  const result = run(bin, ['--install-extension', path, '--force'], 180_000);
+  if (result.status !== 0) {
+    const reason = (result.stderr || result.stdout || result.error?.message || '').trim();
+    throw new Error(`Could not install ${path} into ${bin}. ${reason}`);
   }
   return (result.stdout || '').trim();
 }
