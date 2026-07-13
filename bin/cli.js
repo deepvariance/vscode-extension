@@ -125,7 +125,8 @@ async function main() {
     const editors = detectEditors();
     if (editors.length === 0) {
       log.warn(`No VS Code install found. Install it from ${VSCODE_DOWNLOAD_URL}, then install the "Continue" extension by hand.`);
-    } else if (editors.length === 1) {
+    } else if (editors.length === 1 || values.yes) {
+      // --yes means ask nothing: take the first match (VS Code before its forks).
       editor = editors[0];
     } else {
       editor = required(
