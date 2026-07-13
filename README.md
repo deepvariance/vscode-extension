@@ -3,7 +3,7 @@
 > **Working on this repo? Read [SPEC.md](./SPEC.md) first.** It records the gateway contract, the
 > VS Code constraints that rule out the obvious designs, and a change recipe for each kind of edit.
 
-Sets up the **Qwen3-VL Coder** assistant in VS Code. One command, no key to paste.
+Sets up the **Qwen3.5 27B** assistant in VS Code. One command, no key to paste.
 
 ```bash
 npx deepvariance-vscode
@@ -16,7 +16,7 @@ It asks for your email — the tester invite is built in — and does the rest:
 3. Registers your personal API key (`POST /register`).
 4. Configures the target and hands the key over.
 
-Then reload VS Code and pick **Qwen3-VL Coder** in the Chat model picker. It reads code and
+Then quit and reopen VS Code, and pick **Qwen3.5 27B** in the Chat model picker. It reads code and
 images, and can call tools.
 
 ## How the built-in Chat path works

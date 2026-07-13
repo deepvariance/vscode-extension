@@ -1,9 +1,9 @@
-# Deep Variance — Qwen3-VL Coder
+# Deep Variance — Qwen3.5 27B
 
-Adds **Qwen3-VL Coder** to VS Code's built-in Chat model picker. No Continue, no BYOK key pasting.
+Adds **Qwen3.5 27B** to VS Code's built-in Chat model picker. No Continue, no BYOK key pasting.
 
 Normally installed by `npx deepvariance-vscode`, which registers your personal API key and hands
-it to this extension. If you installed it by hand, run **Deep Variance: Set Up Qwen3-VL Coder**
+it to this extension. If you installed it by hand, run **Deep Variance: Set Up Qwen3.5 27B**
 from the Command Palette.
 
 The key is kept in VS Code's SecretStorage. **Deep Variance: Remove API Key** clears it.

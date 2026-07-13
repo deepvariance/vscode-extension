@@ -26,7 +26,7 @@
     "commands": [
       {
         "command": "deepvariance.setup",
-        "title": "Set Up Qwen3-VL Coder",
+        "title": "Set Up Qwen3.5 27B",
         "category": "Deep Variance"
       },
       {
