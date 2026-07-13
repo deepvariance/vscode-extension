@@ -1,5 +1,8 @@
 # deepvariance-vscode
 
+> **Working on this repo? Read [SPEC.md](./SPEC.md) first.** It records the gateway contract, the
+> VS Code constraints that rule out the obvious designs, and a change recipe for each kind of edit.
+
 Sets up the **Qwen3-VL Coder** assistant in VS Code. One command, no key to paste.
 
 ```bash
