@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import { parseArgs } from 'node:util';
 
-import { cancel, confirm, intro, isCancel, log, note, outro, password, select, spinner, text } from '@clack/prompts';
+import { cancel, confirm, intro, isCancel, log, note, outro, select, spinner, text } from '@clack/prompts';
 
 import { buildConfig, configPath, writeConfig, MODEL_NAME } from '../src/continue-config.js';
 import { EXTENSION_ID, VSCODE_DOWNLOAD_URL, detectEditors, installExtension, isExtensionInstalled } from '../src/editor.js';
-import { DEFAULT_GATEWAY, checkHealth, isValidEmail, register } from '../src/gateway.js';
+import { DEFAULT_GATEWAY, DEFAULT_INVITE, checkHealth, isValidEmail, register } from '../src/gateway.js';
 
 const HELP = `
   deepvariance-vscode — set up ${MODEL_NAME} in VS Code
@@ -16,7 +16,7 @@ const HELP = `
   Options
     --health             Only check that the gateway is up, then exit
     --email <email>      Your email address
-    --invite <token>     Invite token from your administrator
+    --invite <token>     Override the built-in tester invite token
     --gateway <url>      Gateway URL (default: ${DEFAULT_GATEWAY})
     --skip-extension     Don't install the Continue extension
     --yes                Don't ask for confirmation before overwriting config.yaml
@@ -121,14 +121,8 @@ async function main() {
     process.exit(1);
   }
 
-  const invite = required(
-    values.invite ??
-      process.env.DEEPVARIANCE_INVITE ??
-      (await password({
-        message: 'Invite token from your administrator',
-        validate: (value) => (value?.trim() ? undefined : 'The invite token is required.'),
-      })),
-  );
+  // Testers share one invite, so we ship it and only ask for what is actually personal.
+  const invite = values.invite ?? process.env.DEEPVARIANCE_INVITE ?? DEFAULT_INVITE;
 
   const s = spinner();
 
@@ -137,7 +131,9 @@ async function main() {
   try {
     const result = await register({ gateway, email: email.trim(), invite: invite.trim() });
     apiKey = result.apiKey;
-    s.stop(result.createdUser ? `Key created for ${result.email}` : `Existing key returned for ${result.email}`);
+    // Every call mints a fresh key — created_user only says whether the account was new.
+    // Keys accumulate rather than rotate, so any key you already use stays valid.
+    s.stop(`New key issued for ${result.email}${result.createdUser ? '' : ' (account already existed)'}`);
   } catch (error) {
     s.stop('Could not create your API key', 1);
     cancel(error.message);
@@ -174,7 +170,7 @@ async function main() {
       }),
     );
     if (!proceed) {
-      note(buildConfig({ apiKey, gateway }), `Nothing written. Paste this into ${path} yourself:`);
+      note(buildConfig({ apiKey, gateway, email }), `Nothing written. Paste this into ${path} yourself:`);
       outro('Done.');
       return;
     }
@@ -183,10 +179,10 @@ async function main() {
   s.start('Writing Continue configuration');
   let written;
   try {
-    written = await writeConfig({ apiKey, gateway, path });
+    written = await writeConfig({ apiKey, gateway, email, path });
   } catch (error) {
     s.stop('Could not write the configuration', 1);
-    cancel(`${error.message}\n\nPaste this into ${path} yourself:\n\n${buildConfig({ apiKey, gateway })}`);
+    cancel(`${error.message}\n\nPaste this into ${path} yourself:\n\n${buildConfig({ apiKey, gateway, email })}`);
     process.exit(1);
   }
 

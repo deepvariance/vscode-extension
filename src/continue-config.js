@@ -6,6 +6,12 @@ import { normalizeGateway } from './gateway.js';
 
 export const MODEL_NAME = 'Qwen3-VL Coder';
 
+/**
+ * `qwen-coder` is a gateway-side alias, not the underlying model id — the gateway currently
+ * routes it to Qwen/Qwen3.5-27B-FP8. Sending the real id instead is a 404, so keep this as-is.
+ */
+export const MODEL_ID = 'qwen-coder';
+
 /** Continue v1.0+ reads ~/.continue/config.yaml and hot-reloads it on write. */
 export function configPath(home = homedir()) {
   return join(home, '.continue', 'config.yaml');
@@ -14,8 +20,11 @@ export function configPath(home = homedir()) {
 /**
  * The model block from step 5 of the setup guide, as real YAML.
  * We write the file ourselves, so the guide's copy-paste-safe JSON styling is unnecessary.
+ *
+ * X-User-Email mirrors what @deepvariance/opencode sends, so gateway-side usage lines up
+ * across both installers.
  */
-export function buildConfig({ apiKey, gateway }) {
+export function buildConfig({ apiKey, gateway, email }) {
   const apiBase = `${normalizeGateway(gateway)}/v1`;
   return `name: Main Config
 version: 1.0.0
@@ -23,7 +32,7 @@ schema: v1
 models:
   - name: ${MODEL_NAME}
     provider: openai
-    model: qwen-coder
+    model: ${MODEL_ID}
     apiBase: ${apiBase}
     apiKey: ${apiKey}
     capabilities:
@@ -33,6 +42,9 @@ models:
       - chat
       - edit
       - apply
+    requestOptions:
+      headers:
+        X-User-Email: ${email}
 `;
 }
 
@@ -54,9 +66,9 @@ async function readIfExists(path) {
  * Overwrites config.yaml (as the guide instructs) but never destroys the old one:
  * any existing file is copied to a timestamped backup first.
  */
-export async function writeConfig({ apiKey, gateway, path = configPath(), stamp }) {
+export async function writeConfig({ apiKey, gateway, email, path = configPath(), stamp }) {
   const existing = await readIfExists(path);
-  const contents = buildConfig({ apiKey, gateway });
+  const contents = buildConfig({ apiKey, gateway, email });
 
   if (existing === contents) {
     return { path, backup: null, unchanged: true };

@@ -7,7 +7,7 @@ setup guide by hand.
 npx deepvariance-vscode
 ```
 
-It asks for your email and the invite token from your administrator, then does the rest:
+It asks for your email — the tester invite is built in — and does the rest:
 
 1. Checks the gateway is up — nothing is installed or changed if it isn't.
 2. Installs the [Continue](https://marketplace.visualstudio.com/items?itemName=Continue.continue) extension.
@@ -44,6 +44,10 @@ Also read from the environment: `DEEPVARIANCE_EMAIL`, `DEEPVARIANCE_INVITE`, `DE
 
 - **Your existing Continue config is never destroyed.** If `~/.continue/config.yaml` already
   exists, it's copied to a timestamped `config.yaml.backup-…` before being replaced.
+- **Re-running is safe.** `POST /register` mints a *new* key each call and leaves earlier keys
+  working, so setting up again won't break a key you already use elsewhere.
+- The model is reached through the gateway alias `qwen-coder`. Don't replace it with the
+  underlying model id — the gateway 404s on that.
 - VS Code forks (Cursor, Windsurf, VSCodium, Insiders) are detected too — they share
   `~/.continue`, so they work the same. If more than one is installed, you pick.
 - Your API key is personal. Don't share it. `config.yaml` is written `0600`.

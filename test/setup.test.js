@@ -105,11 +105,23 @@ test('register rejects a 200 that carries no api_key', async () => {
 });
 
 test('buildConfig writes valid YAML carrying the key and the /v1 apiBase', () => {
-  const yaml = buildConfig({ apiKey: 'sk-wh-abc', gateway: `${GATEWAY}/` });
+  const yaml = buildConfig({ apiKey: 'sk-wh-abc', gateway: `${GATEWAY}/`, email: 'a@b.com' });
   assert.match(yaml, /^ {4}apiKey: sk-wh-abc$/m);
   assert.match(yaml, /^ {4}apiBase: https:\/\/demo\.deepvariance\.com\/v1$/m);
   assert.match(yaml, /^ {4}model: qwen-coder$/m);
   assert.match(yaml, /^schema: v1$/m);
+});
+
+test('buildConfig keeps the gateway alias, not the underlying model id', () => {
+  // The gateway 404s on Qwen/Qwen3-VL-30B-A3B-Thinking; "qwen-coder" is the alias it routes.
+  const yaml = buildConfig({ apiKey: 'sk-wh-abc', gateway: GATEWAY, email: 'a@b.com' });
+  assert.match(yaml, /^ {4}model: qwen-coder$/m);
+  assert.doesNotMatch(yaml, /Qwen3-VL-30B/);
+});
+
+test('buildConfig sends X-User-Email so gateway usage is attributable', () => {
+  const yaml = buildConfig({ apiKey: 'sk-wh-abc', gateway: GATEWAY, email: 'a@b.com' });
+  assert.match(yaml, /^ {8}X-User-Email: a@b\.com$/m);
 });
 
 test('configPath points at the file Continue actually reads', () => {

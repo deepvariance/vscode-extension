@@ -1,5 +1,13 @@
 export const DEFAULT_GATEWAY = 'https://demo.deepvariance.com';
 
+/**
+ * The shared tester invite. Not a secret: it already ships as a constant inside the public
+ * @deepvariance/opencode package, and testers are expected to have it. Baking it in is what
+ * lets someone run `npx deepvariance-vscode` and only type their email.
+ * Override with --invite or DEEPVARIANCE_INVITE once it rotates.
+ */
+export const DEFAULT_INVITE = 'inv-PxPzaJVIrSdk7F4VeBUiC7X69_qx42Ij';
+
 /** Strip trailing slashes so `${gateway}/register` never doubles up. */
 export function normalizeGateway(gateway) {
   return String(gateway).trim().replace(/\/+$/, '');
