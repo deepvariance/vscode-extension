@@ -1,10 +1,6 @@
 import assert from 'node:assert/strict';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
 import { test } from 'node:test';
 
-import { backupPath, buildConfig, configPath, writeConfig } from '../src/continue-config.js';
 import { checkHealth, isValidEmail, normalizeGateway, register } from '../src/gateway.js';
 
 const GATEWAY = 'https://demo.deepvariance.com';
@@ -104,59 +100,9 @@ test('register rejects a 200 that carries no api_key', async () => {
   );
 });
 
-test('buildConfig writes valid YAML carrying the key and the /v1 apiBase', () => {
-  const yaml = buildConfig({ apiKey: 'sk-wh-abc', gateway: `${GATEWAY}/`, email: 'a@b.com' });
-  assert.match(yaml, /^ {4}apiKey: sk-wh-abc$/m);
-  assert.match(yaml, /^ {4}apiBase: https:\/\/demo\.deepvariance\.com\/v1$/m);
-  assert.match(yaml, /^ {4}model: qwen-coder$/m);
-  assert.match(yaml, /^schema: v1$/m);
-});
 
-test('buildConfig keeps the gateway alias, not the underlying model id', () => {
-  // The gateway 404s on Qwen/Qwen3-VL-30B-A3B-Thinking; "qwen-coder" is the alias it routes.
-  const yaml = buildConfig({ apiKey: 'sk-wh-abc', gateway: GATEWAY, email: 'a@b.com' });
-  assert.match(yaml, /^ {4}model: qwen-coder$/m);
-  assert.doesNotMatch(yaml, /Qwen3-VL-30B/);
-});
 
-test('buildConfig sends X-User-Email so gateway usage is attributable', () => {
-  const yaml = buildConfig({ apiKey: 'sk-wh-abc', gateway: GATEWAY, email: 'a@b.com' });
-  assert.match(yaml, /^ {8}X-User-Email: a@b\.com$/m);
-});
 
-test('configPath points at the file Continue actually reads', () => {
-  assert.equal(configPath('/home/t'), join('/home/t', '.continue', 'config.yaml'));
-});
 
-test('writeConfig backs up an existing config instead of destroying it', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'dv-'));
-  const path = join(dir, 'config.yaml');
-  await writeFile(path, 'models: [my-own-model]\n');
 
-  const result = await writeConfig({ apiKey: 'sk-wh-new', gateway: GATEWAY, path, stamp: 'STAMP' });
 
-  assert.equal(result.backup, backupPath(path, 'STAMP'));
-  assert.equal(await readFile(result.backup, 'utf8'), 'models: [my-own-model]\n');
-  assert.match(await readFile(path, 'utf8'), /sk-wh-new/);
-});
-
-test('writeConfig creates the .continue directory when it is missing', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'dv-'));
-  const path = join(dir, '.continue', 'config.yaml');
-
-  const result = await writeConfig({ apiKey: 'sk-wh-new', gateway: GATEWAY, path });
-
-  assert.equal(result.backup, null);
-  assert.match(await readFile(path, 'utf8'), /sk-wh-new/);
-});
-
-test('writeConfig is a no-op when the config already matches', async () => {
-  const dir = await mkdtemp(join(tmpdir(), 'dv-'));
-  const path = join(dir, 'config.yaml');
-  await writeFile(path, buildConfig({ apiKey: 'sk-wh-same', gateway: GATEWAY }));
-
-  const result = await writeConfig({ apiKey: 'sk-wh-same', gateway: GATEWAY, path });
-
-  assert.equal(result.unchanged, true);
-  assert.equal(result.backup, null);
-});

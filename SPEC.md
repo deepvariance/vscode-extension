@@ -24,15 +24,16 @@ PDF, paste a key, or edit a config file.
 **Replaces:** a 6-step manual setup guide (install Continue → curl a register endpoint → copy the
 key → open `config.yaml` → select-all → paste → save).
 
-**Success criteria** (all currently met except the last):
+**Success criteria** (all met; the last is confirmed only partially — see §10):
 
 - [x] One command; the only question asked is the user's email.
 - [x] Nothing is installed or written when the gateway is down.
 - [x] No API key is ever pasted by a human.
-- [x] An existing config is never destroyed (backed up, timestamped).
+- [x] No file we touch is destroyed — `argv.json` is backed up before it is rewritten.
 - [x] Re-running is safe and idempotent.
 - [x] The model streams, calls tools, reads images, and shows its thinking.
-- [ ] **Verified by a human sending a message in VS Code Chat.** ← still open, see §10.
+- [x] Verified in VS Code: the model appears in the picker, VS Code dispatches to our provider, and
+      the thinking block renders. (A fully rendered answer has not been eyeballed — see §10.)
 
 ---
 
@@ -262,23 +263,15 @@ logic have exactly one implementation.** esbuild bundles `src/` into the extensi
 npx deepvariance-vscode
   │
   ├─ 1. checkHealth()          gateway down → exit 1, touch nothing
-  ├─ 2. ask: chat | continue | both
-  ├─ 3. ask: email             (invite is built in)
-  ├─ 4. register()             POST /register → sk-wh-…
-  │
-  ├─ target=chat ─────────────────────────────────────────────┐
-  │    ├─ installVsix()        bundled .vsix, no marketplace  │
-  │    ├─ writeHandoff()       ~/.deepvariance/handoff.json (0600)
-  │    ├─ enableProposedApi()  ~/.vscode/argv.json            │
-  │    └─ removeStaleGroup()   delete the old BYOK group      │
-  │                                                            │
-  └─ target=continue ─────────────────────────────────────────┤
-       ├─ installExtension()   Continue.continue              │
-       └─ writeConfig()        ~/.continue/config.yaml        │
-                                                              │
-VS Code launches ─────────────────────────────────────────────┘
+  ├─ 2. ask: email             (invite is built in)
+  ├─ 3. register()             POST /register → sk-wh-…
+  ├─ 4. installVsix()          bundled .vsix, no marketplace
+  ├─ 5. writeHandoff()         ~/.deepvariance/handoff.json (0600)
+  └─ 6. enableProposedApi()    ~/.vscode/argv.json → thinking view
+        ↓
+VS Code launches (full restart)
   extension activate()
-    ├─ consumeHandoff()   read key → SecretStorage → DELETE the file
+    ├─ consumeHandoff()        read key → SecretStorage → DELETE the file
     └─ registerLanguageModelChatProvider('deepvariance', provider)
          ↓
     Chat model picker → "Qwen3.5 27B"
@@ -290,8 +283,8 @@ The CLI runs in a terminal; the extension runs in VS Code. They cannot share mem
 written `0600` to `~/.deepvariance/handoff.json`, and the extension moves it into SecretStorage and
 **deletes the file** on activation. Plaintext lives for *seconds*.
 
-(Contrast: Continue's `config.yaml` stores the key in plaintext **permanently**. The handoff is
-strictly the safer of the two, not a new exposure.)
+(For scale: the setup guide this replaces had the tester paste the key into a `config.yaml` that
+keeps it in plaintext **forever**. Seconds beats forever.)
 
 ---
 
@@ -300,17 +293,16 @@ strictly the safer of the two, not a new exposure.)
 ```
 bin/cli.js                  The npx entry point. Arg parsing, prompts, orchestration only.
 src/                        Shared by the CLI *and* the extension (esbuild bundles it in).
+  model.js                  THE definition of the model — id, name, limits. Change it here.
   gateway.js                DEFAULT_GATEWAY, DEFAULT_INVITE, checkHealth, register, isValidEmail
   handoff.js                writeHandoff / consumeHandoff — the CLI→extension key bridge
-  editor.js                 detectEditors, installExtension, installVsix, vsixPath
-  continue-config.js        Continue's ~/.continue/config.yaml
+  editor.js                 detectEditors, installVsix, vsixPath
   argv.js                   ~/.vscode/argv.json — enables the proposed thinking API
-  vscode-byok.js            ONLY cleans up the abandoned BYOK group. Not a config writer.
 test/*.test.js              CLI tests (node:test, stubbed fetch, temp dirs)
 
 extension/
   package.json              contributes.languageModelChatProviders + enabledApiProposals
-  src/constants.js          MODEL_ID / MODEL_NAME / CONTEXT_WINDOW — change the model HERE
+  src/constants.js          VENDOR + a re-export of src/model.js (one definition, no drift)
   src/provider.js           The LM provider: message translation, SSE, tools, thinking
   src/extension.js          activate(): consume handoff, register provider, setup command
   src/test-entry.js         Re-exports internals so tests run against the BUILT bundle
@@ -328,20 +320,20 @@ install the provider with no marketplace account. Rebuild it whenever `extension
 ## 6. Commands
 
 ```bash
-npm test                      # CLI tests (29)
+npm test                      # CLI tests (18)
 npm run build:extension       # rebuild + repackage the bundled .vsix  ← after ANY extension/ change
 cd extension && npm test      # provider tests (9), run against the built bundle
 cd extension && npm run build # bundle only, no .vsix
 
 node bin/cli.js --help
 node bin/cli.js --health      # gateway check only; exits non-zero when down
-node bin/cli.js --target chat --email you@example.com --yes   # fully non-interactive
+node bin/cli.js --email you@example.com --yes   # fully non-interactive
 ```
 
-**Sandbox any test run that writes config**, or it will hit your real `~/.continue` and VS Code:
+**Sandbox any test run that writes config**, or it will install into your real VS Code:
 
 ```bash
-SB=$(mktemp -d); HOME="$SB" node bin/cli.js --target both --email t@example.com --yes
+SB=$(mktemp -d); HOME="$SB" node bin/cli.js --email t@example.com --yes
 ```
 
 `HOME` sandboxing also redirects the `code` CLI's extension dir, so extension installs land in the
@@ -400,8 +392,8 @@ until setup re-runs.
 If the gateway keeps the `qwen-coder` alias pointed at the new model: **change nothing.** That is the
 entire reason we send the alias.
 
-If the display name or limits change: `extension/src/constants.js` (`MODEL_NAME`, `CONTEXT_WINDOW`,
-`MAX_OUTPUT_TOKENS`) and `src/continue-config.js` (`MODEL_NAME`). Then `npm run build:extension`.
+If the display name or limits change: **`src/model.js` only** — the extension re-exports it, so there
+is no second copy. Then `npm run build:extension`.
 **Verify:** `curl` `GET /v1/models` and confirm `max_model_len` matches `CONTEXT_WINDOW`.
 
 ### Change the extension (provider, activation, manifest)
@@ -428,19 +420,11 @@ live gateway with curl** — a false claim fails at message time, in the user's 
 3. Guard it with `wants<Target>` in `main()`.
 4. One test per target in `test/`.
 
-### Delete Continue support (it is now redundant)
+### Remove the whole Continue path
 
-Continue exists only as a fallback while the built-in Chat path proves itself. Once Chat is confirmed
-working, delete:
-
-- `src/continue-config.js` and `test/setup.test.js`'s Continue tests
-- `src/editor.js` → `EXTENSION_ID`, `installExtension`, `isExtensionInstalled`, `continueHome`
-  (keep `detectEditors`, `installVsix`, `vsixPath` — the chat path needs them)
-- `bin/cli.js` → the `continue`/`both` targets and the whole `wantsContinue` block
-- `MODEL_NAME` moves to `extension/src/constants.js` as the single definition
-
-That is ~150 lines out. **Do not delete it until a human has sent a message to Qwen3.5 27B in Chat.**
-Removing the fallback before the replacement is proven leaves you with neither.
+Already done (commit "drop the Continue path"). `src/continue-config.js`, `src/vscode-byok.js`, the
+`--target` flag, and the Continue install helpers are gone. VS Code's built-in Chat is the only
+target. Nothing in the tree references Continue any more.
 
 ### Publish
 
@@ -473,17 +457,23 @@ never prompting, backup-before-overwrite.
 
 ## 10. Open items
 
-1. **Nobody has sent a message to Qwen3.5 27B in VS Code Chat.** Everything else is verified; this
-   is not. Until it happens, "the provider works" is a claim, not a fact. Blocks deleting Continue.
+1. **A fully rendered answer has not been eyeballed.** The picker, the dispatch to our provider, and
+   the streaming thinking block are all confirmed in VS Code; the final answer text was never watched
+   to completion. Low risk, but not zero.
 2. **`@deepvariance/opencode@0.2.1` is broken in production.** It pins
    `Qwen/Qwen3-VL-30B-A3B-Thinking`, which the gateway 404s. Every opencode tester is dead right now.
    Fix: send `qwen-coder`. (Owned by the gateway team, not this repo.)
-3. **Nothing is published to npm.** `npx deepvariance-vscode` will not work for testers yet.
-4. **Continue's built-in web search returns 401** — Continue's *own* free-trial proxy
+3. **Nothing is published to npm.** `npx deepvariance-vscode` will not work for testers yet. This is
+   the only thing standing between the code and a tester using it.
+4. **The 4-image cap is not enforced client-side.** vLLM runs with
+   `--limit-mm-per-prompt {"image": 4}` but the provider advertises `imageInput: true` with no limit,
+   so a 5-image message fails at the gateway instead of locally. `MAX_IMAGES_PER_PROMPT` exists in
+   `src/model.js` but nothing reads it yet.
+5. **(Historical) Continue's built-in web search returned 401** — Continue's *own* free-trial proxy
    (`proxy-server-blue-…run.app/web`) fails with `"Error in Continue free trial server: … 401 Invalid
    API key"`. It never touches our gateway and **no config of ours can fix it.** Not our bug. A real
-   fix means an MCP search server (e.g. Exa) with the user's own key.
-5. **Proposed-API fragility.** If `languageModelThinkingPart` changes, thinking silently disappears.
+   fix means an MCP search server (e.g. Exa) with the user's own key. Moot now that Continue is gone.
+6. **Proposed-API fragility.** If `languageModelThinkingPart` changes, thinking silently disappears.
    The guard prevents breakage, not disappearance.
 
 ---
@@ -517,7 +507,6 @@ Each of these cost real debugging time. They are all now covered by a test or a 
 
 **Ask first**
 
-- Deleting the Continue path (blocked on item 1 in §10).
 - Anything that mints keys against the live gateway with a *new* email — it creates real account
   state that never gets cleaned up.
 - Publishing to npm, or installing/uninstalling extensions in the user's real editor.
@@ -529,8 +518,8 @@ Each of these cost real debugging time. They are all now covered by a test or a 
   works until the next VS Code update, needs VS Code closed, and is unsupported. This is the 3am
   pager.
 - Claim a model capability that has not been verified live.
-- Put the API key anywhere permanent in plaintext (the handoff file is deleted on read; Continue's
-  `config.yaml` is the pre-existing exception, not a precedent).
+- Put the API key anywhere permanent in plaintext. The handoff file is deleted on read; that is the
+  only plaintext copy that should ever exist.
 - Commit a real API key. The *invite* is public by design; keys are not.
 
 ---
@@ -539,8 +528,8 @@ Each of these cost real debugging time. They are all now covered by a test or a 
 
 State these so they can be corrected rather than silently inherited:
 
-1. Testers are on VS Code (forks — Cursor, Windsurf, VSCodium, Insiders — are detected, and share
-   `~/.continue`, but the built-in-Chat path is only verified on VS Code proper).
+1. Testers are on VS Code. Forks (Cursor, Windsurf, VSCodium, Insiders) are detected and the VSIX
+   installs into them, but the provider is only verified on VS Code proper.
 2. The gateway stays OpenAI-compatible and keeps the `qwen-coder` alias.
 3. The shared invite model persists (one token for all testers, email is the only per-user input).
 4. Testers have Node ≥ 18 available for `npx`.

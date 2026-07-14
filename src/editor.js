@@ -1,17 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import { readdirSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-export const EXTENSION_ID = 'Continue.continue';
-
 const IS_WINDOWS = process.platform === 'win32';
 
-/**
- * VS Code and its forks all ship the same `--install-extension` CLI, and they all
- * read Continue's config from ~/.continue, so any of them is a valid target.
- */
+/** VS Code and its forks all ship the same `--install-extension` CLI, so any of them works. */
 const EDITORS = [
   { name: 'VS Code', bin: 'code' },
   { name: 'VS Code Insiders', bin: 'code-insiders' },
@@ -62,16 +56,6 @@ export function detectEditors() {
   return found;
 }
 
-/** Downloads from the marketplace, so it gets a far longer leash than a --version probe. */
-export function installExtension(bin, extensionId = EXTENSION_ID) {
-  const result = run(bin, ['--install-extension', extensionId, '--force'], 180_000);
-  if (result.status !== 0) {
-    const reason = (result.stderr || result.stdout || result.error?.message || '').trim();
-    throw new Error(`\`${bin} --install-extension ${extensionId}\` failed. ${reason}`);
-  }
-  return (result.stdout || '').trim();
-}
-
 /** The provider extension ships inside this npm package rather than a marketplace. */
 export function vsixPath() {
   const here = dirname(fileURLToPath(import.meta.url));
@@ -89,15 +73,6 @@ export function installVsix(bin, path) {
   return (result.stdout || '').trim();
 }
 
-export function isExtensionInstalled(bin, extensionId = EXTENSION_ID) {
-  const result = run(bin, ['--list-extensions']);
-  if (result.status !== 0) return false;
-  return String(result.stdout).split(/\r?\n/).some((line) => line.trim().toLowerCase() === extensionId.toLowerCase());
-}
-
 /** Where the user would install VS Code from, if they have none. */
 export const VSCODE_DOWNLOAD_URL = 'https://code.visualstudio.com/download';
 
-export function continueHome() {
-  return join(homedir(), '.continue');
-}

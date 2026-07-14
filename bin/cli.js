@@ -3,14 +3,12 @@ import { parseArgs } from 'node:util';
 
 import { cancel, confirm, intro, isCancel, log, note, outro, select, spinner, text } from '@clack/prompts';
 
-import { buildConfig, configPath, writeConfig, MODEL_NAME } from '../src/continue-config.js';
-import { EXTENSION_ID, VSCODE_DOWNLOAD_URL, detectEditors, installExtension, installVsix, isExtensionInstalled, vsixPath } from '../src/editor.js';
-import { DEFAULT_GATEWAY, DEFAULT_INVITE, checkHealth, isValidEmail, register } from '../src/gateway.js';
 import { enableProposedApi } from '../src/argv.js';
+import { VSCODE_DOWNLOAD_URL, detectEditors, installVsix, vsixPath } from '../src/editor.js';
+import { DEFAULT_GATEWAY, DEFAULT_INVITE, checkHealth, isValidEmail, register } from '../src/gateway.js';
 import { writeHandoff } from '../src/handoff.js';
-import { removeStaleGroup } from '../src/vscode-byok.js';
+import { MODEL_NAME } from '../src/model.js';
 
-const TARGETS = ['chat', 'continue', 'both'];
 const PROVIDER_EXTENSION_ID = 'deepvariance.deepvariance-vscode';
 
 const HELP = `
@@ -20,15 +18,12 @@ const HELP = `
     npx deepvariance-vscode [options]
 
   Options
-    --health             Only check that the gateway is up, then exit
-    --target <where>     chat | continue | both  (default: ask)
-                           chat     — VS Code's built-in Chat (installs our provider)
-                           continue — the Continue extension
-    --email <email>      Your email address
-    --invite <token>     Override the built-in tester invite token
-    --gateway <url>      Gateway URL (default: ${DEFAULT_GATEWAY})
-    --yes                Don't ask for confirmation before writing config
-    --help               Show this message
+    --health           Only check that the gateway is up, then exit
+    --email <email>    Your email address
+    --invite <token>   Override the built-in tester invite token
+    --gateway <url>    Gateway URL (default: ${DEFAULT_GATEWAY})
+    --yes              Ask nothing; take the defaults
+    --help             Show this message
 
   Environment
     DEEPVARIANCE_EMAIL, DEEPVARIANCE_INVITE, DEEPVARIANCE_GATEWAY
@@ -37,7 +32,6 @@ const HELP = `
 const { values } = parseArgs({
   options: {
     health: { type: 'boolean', default: false },
-    target: { type: 'string' },
     email: { type: 'string' },
     invite: { type: 'string' },
     gateway: { type: 'string' },
@@ -50,11 +44,6 @@ const { values } = parseArgs({
 if (values.help) {
   console.log(HELP);
   process.exit(0);
-}
-
-if (values.target && !TARGETS.includes(values.target)) {
-  console.error(`--target must be one of: ${TARGETS.join(', ')}`);
-  process.exit(1);
 }
 
 /** Any cancelled prompt (Ctrl+C) exits cleanly rather than continuing with undefined. */
@@ -91,46 +80,29 @@ async function main() {
 
   intro(`Setting up ${MODEL_NAME} for VS Code`);
 
-  // Fail before we touch the editor or the filesystem.
+  // Fail before we touch the editor or the filesystem. A 530 here usually just means the GPU
+  // instance is paused.
   const health = await healthGate(gateway);
   if (!health.ok) {
     cancel('Gateway is down, so your API key cannot be created. Nothing was installed or configured — try again later.');
     process.exit(1);
   }
 
-  const target = required(
-    values.target ??
-      (await select({
-        message: 'Where should the model be set up?',
-        options: [
-          { value: 'chat', label: "VS Code's built-in Chat", hint: 'no extension needed' },
-          { value: 'continue', label: 'The Continue extension', hint: 'installs Continue' },
-          { value: 'both', label: 'Both' },
-        ],
-      })),
-  );
-
-  const wantsChat = target === 'chat' || target === 'both';
-  const wantsContinue = target === 'continue' || target === 'both';
-
-  // Both targets install something now: the provider extension, or Continue.
-  let editor = null;
-  {
-    const editors = detectEditors();
-    if (editors.length === 0) {
-      // handled per-target below
-    } else if (editors.length === 1 || values.yes) {
-      // --yes means ask nothing: take the first match (VS Code before its forks).
-      editor = editors[0];
-    } else {
-      editor = required(
-        await select({
-          message: 'Which editor should it be installed into?',
-          options: editors.map((e) => ({ value: e, label: e.name, hint: e.bin })),
-        }),
-      );
-    }
+  const editors = detectEditors();
+  if (editors.length === 0) {
+    cancel(`No VS Code install found. Install it from ${VSCODE_DOWNLOAD_URL}, then re-run.`);
+    process.exit(1);
   }
+
+  const editor =
+    editors.length === 1 || values.yes
+      ? editors[0] // --yes means ask nothing: take the first match (VS Code before its forks)
+      : required(
+          await select({
+            message: 'Which editor should it be installed into?',
+            options: editors.map((e) => ({ value: e, label: e.name, hint: e.bin })),
+          }),
+        );
 
   const email = required(
     values.email ??
@@ -151,9 +123,7 @@ async function main() {
   const invite = values.invite ?? process.env.DEEPVARIANCE_INVITE ?? DEFAULT_INVITE;
 
   if (!values.yes) {
-    const proceed = required(
-      await confirm({ message: 'Create your API key and configure VS Code? Any existing config is backed up first.' }),
-    );
+    const proceed = required(await confirm({ message: `Create your API key and add ${MODEL_NAME} to ${editor.name}?` }));
     if (!proceed) {
       cancel('Setup cancelled. Nothing was changed.');
       process.exit(0);
@@ -180,65 +150,29 @@ async function main() {
     log.warn('The gateway returned a key that does not start with "sk-wh-". Using it anyway.');
   }
 
-  if (wantsChat) {
-    const chatEditor = editor;
-    if (!chatEditor) {
-      log.warn(`No VS Code install found. Install it from ${VSCODE_DOWNLOAD_URL}, then re-run.`);
-    } else {
-      s.start(`Adding ${MODEL_NAME} to ${chatEditor.name}'s Chat`);
-      try {
-        // The extension IS the model provider, so it stays installed. Only the key handoff
-        // is transient: the extension moves it into SecretStorage and deletes the file.
-        installVsix(chatEditor.bin, vsixPath());
-        await writeHandoff({ apiKey, gateway, email });
-        s.stop(`Installed the Deep Variance provider into ${chatEditor.name}`);
-
-        // Showing the model's chain of thought needs a proposed API, which VS Code only grants
-        // to an extension named in argv.json. Takes effect on a full restart.
-        const argv = await enableProposedApi({ extensionId: PROVIDER_EXTENSION_ID });
-        if (argv.changed) log.info(`Enabled the thinking view for ${MODEL_NAME} (${argv.path})`);
-      } catch (error) {
-        s.stop('Could not install the Deep Variance provider', 1);
-        log.warn(error.message);
-      }
-
-      // An older run may have left a keyless BYOK group that shows a broken duplicate model.
-      const stale = await removeStaleGroup();
-      if (stale.removed) log.info('Removed the old key-pasting setup from chatLanguageModels.json');
-    }
+  s.start(`Adding ${MODEL_NAME} to ${editor.name}`);
+  try {
+    // The extension IS the model provider, so it stays installed. Only the key handoff is
+    // transient: the extension moves it into SecretStorage and deletes the file.
+    installVsix(editor.bin, vsixPath());
+    await writeHandoff({ apiKey, gateway, email });
+    s.stop(`Installed the Deep Variance provider into ${editor.name}`);
+  } catch (error) {
+    s.stop('Could not install the Deep Variance provider', 1);
+    cancel(error.message);
+    process.exit(1);
   }
 
-  if (wantsContinue) {
-    if (editor) {
-      s.start(`Installing the Continue extension into ${editor.name}`);
-      try {
-        if (isExtensionInstalled(editor.bin)) {
-          s.stop(`Continue is already installed in ${editor.name}`);
-        } else {
-          installExtension(editor.bin);
-          s.stop(`Installed Continue into ${editor.name}`);
-        }
-      } catch (error) {
-        s.stop('Could not install the Continue extension', 1);
-        log.warn(`${error.message}\nInstall "${EXTENSION_ID}" from the Extensions panel by hand.`);
-      }
-    }
-
-    s.start('Writing Continue configuration');
-    try {
-      const written = await writeConfig({ apiKey, gateway, email, path: configPath() });
-      s.stop(written.unchanged ? 'Continue already up to date' : `Wrote ${written.path}`);
-      if (written.backup) log.info(`Your previous Continue config was saved to ${written.backup}`);
-    } catch (error) {
-      s.stop('Could not write the Continue configuration', 1);
-      log.warn(`${error.message}\n\nPaste this into ${configPath()} yourself:\n\n${buildConfig({ apiKey, gateway, email })}`);
-    }
+  // Showing the model's chain of thought needs a proposed API, which VS Code only grants to an
+  // extension named in argv.json. Takes effect on a full restart.
+  try {
+    const argv = await enableProposedApi({ extensionId: PROVIDER_EXTENSION_ID });
+    if (argv.changed) log.info(`Enabled the thinking view (${argv.path})`);
+  } catch (error) {
+    log.warn(`${error.message}\nThe model will still work; you just won't see it think.`);
   }
 
-  const next = [];
-  if (wantsChat) next.push(`Quit and reopen VS Code, then pick "${MODEL_NAME}" in the Chat model picker.`);
-  if (wantsContinue) next.push(`Open the Continue panel and pick "${MODEL_NAME}".`);
-  note(next.join('\n'), 'You are set — no key to paste');
+  note(`Quit and reopen ${editor.name}, then pick "${MODEL_NAME}" in the Chat model picker.`, 'You are set — no key to paste');
 
   outro('Happy coding!');
 }
