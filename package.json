@@ -1,7 +1,7 @@
 {
   "name": "deepvariance-vscode",
   "version": "0.1.0",
-  "description": "Interactive setup for the Qwen3-VL Coder assistant in VS Code (via the Continue extension).",
+  "description": "One-command setup for the Qwen3.5 27B coding assistant in VS Code's built-in Chat.",
   "type": "module",
   "bin": {
     "deepvariance-vscode": "bin/cli.js"

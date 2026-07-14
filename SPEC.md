@@ -137,6 +137,35 @@ This is a **reasoning model**: it spends most of its token budget in `reasoning`
    "length"`, `content: null`, and only reasoning. Tests need ≥ ~400 tokens to see a reply.
 2. Ignoring `delta.reasoning` makes the model look silent and thoughtless. (It did, until fixed.)
 
+### The host behind the gateway (JarvisLabs)
+
+The gateway is a **paused-when-idle GPU box**, not always-on infrastructure. Managed with the `jl`
+CLI (`jl list`, `jl pause <id> -y`, `jl resume <id> -y`, `jl exec <id> <cmd>`).
+
+| Fact | Detail |
+|---|---|
+| Instance | `API-Hosting`, 1× **H200** (143 GB), region IN2 |
+| Model server unit | **`warehouse-gateway.service`** — *not* `warehouse`. `systemctl is-enabled warehouse` says "No such file or directory", which looks dead but isn't. |
+| Tunnel | `cloudflared.service`, active + enabled |
+| **Cold start** | **~140 s** from resume to `/health` 200. Progresses `530` (origin gone) → `502` (tunnel up, app not ready) → `200`. |
+| **Resume changes the machine id** | `444396` → `444694`. Any runbook that hardcodes an id goes stale. |
+
+vLLM is launched with (this explains most of §2):
+
+```
+--model Qwen/Qwen3.5-27B-FP8  --max-model-len 131072   # = CONTEXT_WINDOW
+--reasoning-parser qwen3                               # = why `delta.reasoning` exists
+--tool-call-parser qwen3_xml                           # = why tool calling works
+--limit-mm-per-prompt {"image": 4}                     # = MAX 4 IMAGES PER PROMPT
+--kv-cache-dtype fp8 --max-num-seqs 512 --enable-prefix-caching --gpu-memory-utilization 0.9
+```
+
+> **Unenforced limit:** the provider advertises `imageInput: true` with no cap, so a 5-image chat
+> message fails at the gateway rather than being caught locally. Nothing enforces the 4-image limit
+> today.
+
+A `530` from the gateway almost always means **the instance is paused**, not that anything is broken.
+
 ---
 
 ## 3. Platform constraints: why the obvious approaches fail
