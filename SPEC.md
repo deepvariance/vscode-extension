@@ -438,9 +438,28 @@ first, so every other commit to `main` is a no-op rather than a failed re-publis
 Authenticated by **npm trusted publishing (OIDC)**: GitHub mints a short-lived token per workflow
 run. There is no `NPM_TOKEN` and no secret to leak or rotate.
 
-The tarball is **bundle-only**: `dist/cli.js` (minified, `@clack/prompts` bundled in, zero runtime
-deps) plus the `.vsix`. No `src/`, no `bin/`, no sourcemaps — CI fails if any leak in. No marketplace
-account is needed; the `.vsix` rides inside the npm tarball.
+#### No-source publish policy
+
+**No source code is ever published.** Both artifacts ship minified bundles only:
+
+| Artifact | Contents |
+|---|---|
+| npm tarball | `package.json`, `README.md`, `dist/cli.js` (minified, `@clack/prompts` bundled in, **zero runtime deps**), and the `.vsix` |
+| `.vsix` | manifest, `package.json`, readme, `dist/extension.js` (minified) |
+
+No `src/`, no `bin/`, no sourcemaps, in either. **CI enforces this on both** — it greps each artifact
+for source paths and sourcemaps and asserts the bundles are actually minified. One careless edit to
+`.vscodeignore` or `package.json#files` would otherwise republish the source with nobody noticing.
+
+Sourcemaps are off in both esbuild configs *for this reason* — a `.map` puts the original source
+back, minification or not. Don't turn them on for a published build.
+
+> Minification is not a security control. It raises the cost of reading the code; it does not hide
+> anything from someone determined. The baked invite token is recoverable from the bundle by anyone
+> who looks — it is public by design (§2), so this is fine, but do not put a real secret in the
+> bundle and assume minification protects it.
+
+No marketplace account is needed; the `.vsix` rides inside the npm tarball.
 
 #### Why not a token
 

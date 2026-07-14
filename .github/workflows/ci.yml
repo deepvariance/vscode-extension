@@ -55,20 +55,37 @@ jobs:
       - name: The npm tarball ships the .vsix
         run: npm pack --dry-run 2>&1 | grep -q '\.vsix' || { echo "::error::npm pack does not include the .vsix"; exit 1; }
 
-      # We publish a bundle, not sources. A stray src/ or sourcemap would put the code back on npm.
-      - name: The npm tarball ships no source
+      # POLICY: no source code is ever published. Both artifacts ship minified bundles only.
+      # This is enforced, not trusted — one edit to .vscodeignore or package.json#files would
+      # otherwise put the source back on npm without anyone noticing.
+      - name: npm tarball — bundle only, minified
         run: |
           npm run build
           listing=$(npm pack --dry-run 2>&1)
           if grep -qE ' (src|bin)/|\.map$' <<<"$listing"; then
             echo "::error::source or sourcemaps leaked into the npm tarball"; echo "$listing"; exit 1
           fi
-          echo "ok: bundle only"
+          lines=$(wc -l < dist/cli.js)
+          if [ "$lines" -gt 200 ]; then
+            echo "::error::dist/cli.js is $lines lines — it is not minified"; exit 1
+          fi
+          echo "ok: bundle only, $lines lines"
 
-      # dist/ is gitignored, so the bundle has to be built before it can be packaged.
-      - name: Packaging the extension still works
+      - name: .vsix — bundle only, minified
         working-directory: extension
-        run: npm run build && cp ../README.md README.md && npx vsce package --skip-license --out /tmp/check.vsix
+        run: |
+          npm run build
+          cp ../README.md README.md
+          npx vsce package --skip-license --out /tmp/check.vsix
+          if unzip -l /tmp/check.vsix | grep -qE 'src/|\.map'; then
+            echo "::error::source or sourcemaps leaked into the .vsix"; unzip -l /tmp/check.vsix; exit 1
+          fi
+          unzip -p /tmp/check.vsix extension/dist/extension.js > /tmp/ext.js
+          lines=$(wc -l < /tmp/ext.js)
+          if [ "$lines" -gt 50 ]; then
+            echo "::error::the extension bundle is $lines lines — it is not minified"; exit 1
+          fi
+          echo "ok: bundle only, $lines lines"
 
   publish:
     needs: [test, package]
