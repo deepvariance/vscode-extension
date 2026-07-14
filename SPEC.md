@@ -251,6 +251,14 @@ case "enable-proposed-api":
 
 **This requires a full quit-and-reopen of VS Code, not a window reload** — the flag is read at launch.
 
+> **README vs reality.** The user-facing README tells people to run *Reload Window*, which is correct
+> for what they'll do 99% of the time: **the model, chat, tools, and vision all appear after a
+> reload** (the extension host respawns and picks up the freshly installed extension). Only the
+> *thinking view* needs the argv.json flag, and that flag is applied at Electron launch — so the very
+> first time argv.json is written, the thinking block won't render until one full restart. After that
+> restart it persists, and reloads are fine forever. Keep the README on "Reload Window"; don't scare
+> every user with a restart step that only matters for one feature, one time.
+
 **Risk:** proposed APIs can change or vanish between releases. The provider therefore guards on
 `vscode.LanguageModelThinkingPart` being defined and silently drops thinking if it isn't — it
 degrades, it never breaks, and it never dumps raw reasoning into the answer as plain text.
@@ -458,6 +466,8 @@ back, minification or not. Don't turn them on for a published build.
 > anything from someone determined. The baked invite token is recoverable from the bundle by anyone
 > who looks — it is public by design (§2), so this is fine, but do not put a real secret in the
 > bundle and assume minification protects it.
+
+**Two READMEs.** `README.md` is the GitHub landing page (CI badge, contributor pointers). `README.npm.md` is the product page shipped to npm *and* the marketplace `.vsix` — no CI badge, no contributor notes. The swap happens in the ephemeral runner (and the extension `package` script): `cp README.npm.md README.md` right before publish/package. The committed `README.md` is never touched.
 
 No marketplace account is needed; the `.vsix` rides inside the npm tarball.
 
