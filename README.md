@@ -30,17 +30,6 @@ Then **quit and reopen VS Code**, open Chat, and pick **Qwen3.5 27B** from the m
 
 VS Code 1.104 or newer. Cursor, Windsurf, VSCodium and Insiders work too.
 
-## If something goes wrong
-
-| | |
-|---|---|
-| **"Gateway is down"** | The server is asleep. Wait a couple of minutes and run the command again. |
-| **No thinking shown** | Quit VS Code completely and reopen it — a window reload isn't enough. |
-| **Model not in the list** | Run `npx @deepvariance/vscode` again. |
-| **Sign-in errors in Chat** | Run `npx @deepvariance/vscode` again to get a fresh key. |
-
-To remove your key: **Deep Variance: Remove API Key** in the Command Palette.
-
 ## Options
 
 Most people never need these.
