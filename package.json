@@ -4,24 +4,26 @@
   "description": "One-command setup for the Qwen3.5 27B coding assistant in VS Code's built-in Chat.",
   "type": "module",
   "bin": {
-    "deepvariance-vscode": "bin/cli.js"
+    "deepvariance-vscode": "dist/cli.js"
   },
   "files": [
-    "bin",
-    "src",
+    "dist",
     "extension/*.vsix"
   ],
   "scripts": {
+    "build": "node esbuild.mjs",
+    "build:extension": "cd extension && npm install && npm run package",
     "test": "node --test test/*.test.js",
-    "start": "node bin/cli.js",
-    "build:extension": "cd extension && npm install && npm run package"
+    "prepack": "npm run build"
   },
   "engines": {
     "node": ">=18"
   },
   "license": "UNLICENSED",
   "private": false,
-  "dependencies": {
-    "@clack/prompts": "^0.11.0"
+  "dependencies": {},
+  "devDependencies": {
+    "@clack/prompts": "^0.11.0",
+    "esbuild": "^0.24.0"
   }
 }

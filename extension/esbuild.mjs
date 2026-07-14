@@ -9,7 +9,8 @@ const options = {
   platform: 'node',
   target: 'node20',
   external: ['vscode'],
-  sourcemap: true,
+  minify: true,
+  sourcemap: false, // a sourcemap would put the source in the .vsix
 };
 
 const testOptions = { ...options, entryPoints: ['src/test-entry.js'], outfile: 'dist/test-entry.cjs' };

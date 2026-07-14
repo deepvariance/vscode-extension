@@ -55,7 +55,56 @@ jobs:
       - name: The npm tarball ships the .vsix
         run: npm pack --dry-run 2>&1 | grep -q '\.vsix' || { echo "::error::npm pack does not include the .vsix"; exit 1; }
 
+      # We publish a bundle, not sources. A stray src/ or sourcemap would put the code back on npm.
+      - name: The npm tarball ships no source
+        run: |
+          npm run build
+          listing=$(npm pack --dry-run 2>&1)
+          if grep -qE ' (src|bin)/|\.map$' <<<"$listing"; then
+            echo "::error::source or sourcemaps leaked into the npm tarball"; echo "$listing"; exit 1
+          fi
+          echo "ok: bundle only"
+
       # dist/ is gitignored, so the bundle has to be built before it can be packaged.
       - name: Packaging the extension still works
         working-directory: extension
         run: npm run build && npx vsce package --allow-missing-repository --skip-license --out /tmp/check.vsix
+
+  publish:
+    needs: [test, package]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: https://registry.npmjs.org
+          cache: npm
+
+      - run: npm ci
+
+      # Every commit to main lands here, but only a version bump is a release. Publishing an
+      # already-published version is a hard error on npm, so check first and no-op otherwise.
+      - name: Is this version already on npm?
+        id: check
+        run: |
+          name=$(node -p "require('./package.json').name")
+          version=$(node -p "require('./package.json').version")
+          if npm view "$name@$version" version >/dev/null 2>&1; then
+            echo "published=true" >> "$GITHUB_OUTPUT"
+            echo "$name@$version is already on npm — nothing to do."
+          else
+            echo "published=false" >> "$GITHUB_OUTPUT"
+            echo "publishing $name@$version"
+          fi
+
+      # prepack rebuilds dist/, so the tarball can never be stale relative to the source.
+      # No --provenance: npm only generates it for public repos, and this one is private.
+      - name: Publish
+        if: steps.check.outputs.published == 'false'
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -91,7 +91,7 @@ The extension **stays installed** — it serves the model. The *handoff file* is
 | CLI | ✅ 18 tests |
 | Provider extension | ✅ 9 tests, run against the built bundle |
 | Streaming · tools · vision · thinking | ✅ verified against the live gateway |
-| Published to npm | ❌ not yet — `npx` won't work for testers until it is |
+| Publish | 🤖 automatic — CI publishes on a version bump merged to `main` |
 | 4-image cap enforced client-side | ❌ recorded in `src/model.js`, not read |
 
 ## Development
@@ -99,14 +99,18 @@ The extension **stays installed** — it serves the model. The *handoff file* is
 ```bash
 npm test                    # CLI
 cd extension && npm test    # provider
+npm run build               # bundle the CLI -> dist/cli.js (minified)
 npm run build:extension     # rebuild + repackage the bundled .vsix (commit it)
 ```
 
-The `.vsix` is committed and ships inside the npm tarball, so `npx` needs no marketplace. CI fails if
-it drifts from `extension/package.json`.
+**Releasing:** bump `version` in `package.json` and merge to `main`. CI publishes it. Any other
+commit to `main` is a no-op — it only publishes when the version isn't already on npm.
 
 **Bump `extension/package.json` when the extension changes** — VS Code won't reinstall the same
-version.
+version, and CI fails if the committed `.vsix` doesn't match.
+
+Published artifacts are **bundled and minified** — `dist/cli.js` and the `.vsix`. No source, no
+sourcemaps, zero runtime dependencies (`@clack/prompts` is bundled in). CI enforces this.
 
 ## Troubleshooting
 

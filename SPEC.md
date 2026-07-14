@@ -291,7 +291,8 @@ keeps it in plaintext **forever**. Seconds beats forever.)
 ## 5. Project structure
 
 ```
-bin/cli.js                  The npx entry point. Arg parsing, prompts, orchestration only.
+bin/cli.js                  The npx entry point (source). Bundled to dist/cli.js for publishing.
+esbuild.mjs                 Bundles + minifies the CLI. Only dist/ and the .vsix reach npm.
 src/                        Shared by the CLI *and* the extension (esbuild bundles it in).
   model.js                  THE definition of the model — id, name, limits. Change it here.
   gateway.js                DEFAULT_GATEWAY, DEFAULT_INVITE, checkHealth, register, isValidEmail
@@ -428,10 +429,16 @@ target. Nothing in the tree references Continue any more.
 
 ### Publish
 
-```bash
-npm publish            # the .vsix rides inside the tarball — no marketplace account needed
-```
-**Verify first:** `npm pack --dry-run` must list `extension/*.vsix`.
+**Automatic.** Bump `version` in `package.json`, merge to `main`, and CI publishes. It checks npm
+first, so every other commit to `main` is a no-op rather than a failed re-publish.
+
+Needs the **`NPM_TOKEN`** repo secret (an npm automation token). Without it the publish step fails.
+
+The tarball is **bundle-only**: `dist/cli.js` (minified, `@clack/prompts` bundled in, zero runtime
+deps) plus the `.vsix`. No `src/`, no `bin/`, no sourcemaps — CI fails if any leak in. `prepack`
+rebuilds `dist/` so it can never be stale.
+
+No marketplace account is needed: the `.vsix` rides inside the npm tarball.
 
 ---
 
