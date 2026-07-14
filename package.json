@@ -1,5 +1,5 @@
 {
-  "name": "deepvariance-vscode",
+  "name": "@deepvariance/vscode",
   "version": "0.1.0",
   "description": "One-command setup for the Qwen3.5 27B coding assistant in VS Code's built-in Chat.",
   "type": "module",
@@ -33,5 +33,8 @@
   "bugs": {
     "url": "https://github.com/deepvariance/vscode-extension/issues"
   },
-  "homepage": "https://github.com/deepvariance/vscode-extension#readme"
+  "homepage": "https://github.com/deepvariance/vscode-extension#readme",
+  "publishConfig": {
+    "access": "public"
+  }
 }

@@ -15,7 +15,7 @@ Get a tester from *nothing* to *a working AI coding assistant in VS Code* with *
 zero manual steps**.
 
 ```bash
-npx deepvariance-vscode
+npx @deepvariance/vscode
 ```
 
 **User:** a tester at Deep Variance. Has VS Code. Does not have an API key. Should not have to read a
@@ -161,9 +161,12 @@ vLLM is launched with (this explains most of §2):
 --kv-cache-dtype fp8 --max-num-seqs 512 --enable-prefix-caching --gpu-memory-utilization 0.9
 ```
 
-> **Unenforced limit:** the provider advertises `imageInput: true` with no cap, so a 5-image chat
-> message fails at the gateway rather than being caught locally. Nothing enforces the 4-image limit
-> today.
+> **The limit is per *request*, and a request carries the whole conversation** — so images
+> accumulate across turns until a chat trips the cap. Rejecting the request would kill the
+> conversation permanently (every later turn resends the same images and fails identically), so the
+> provider keeps the **4 most recent** images and replaces older ones with a visible note. Degrade,
+> don't die — and never drop an image silently, or the model answers confidently about something it
+> cannot see.
 
 A `530` from the gateway almost always means **the instance is paused**, not that anything is broken.
 
@@ -260,7 +263,7 @@ Two packages, one shared core. **The CLI and the extension share `src/` so regis
 logic have exactly one implementation.** esbuild bundles `src/` into the extension.
 
 ```
-npx deepvariance-vscode
+npx @deepvariance/vscode
   │
   ├─ 1. checkHealth()          gateway down → exit 1, touch nothing
   ├─ 2. ask: email             (invite is built in)
@@ -513,17 +516,13 @@ never prompting, backup-before-overwrite.
 2. **`@deepvariance/opencode@0.2.1` is broken in production.** It pins
    `Qwen/Qwen3-VL-30B-A3B-Thinking`, which the gateway 404s. Every opencode tester is dead right now.
    Fix: send `qwen-coder`. (Owned by the gateway team, not this repo.)
-3. **Nothing is published to npm.** `npx deepvariance-vscode` will not work for testers yet. This is
+3. **Nothing is published to npm.** `npx @deepvariance/vscode` will not work for testers yet. This is
    the only thing standing between the code and a tester using it.
-4. **The 4-image cap is not enforced client-side.** vLLM runs with
-   `--limit-mm-per-prompt {"image": 4}` but the provider advertises `imageInput: true` with no limit,
-   so a 5-image message fails at the gateway instead of locally. `MAX_IMAGES_PER_PROMPT` exists in
-   `src/model.js` but nothing reads it yet.
-5. **(Historical) Continue's built-in web search returned 401** — Continue's *own* free-trial proxy
+4. **(Historical) Continue's built-in web search returned 401** — Continue's *own* free-trial proxy
    (`proxy-server-blue-…run.app/web`) fails with `"Error in Continue free trial server: … 401 Invalid
    API key"`. It never touches our gateway and **no config of ours can fix it.** Not our bug. A real
    fix means an MCP search server (e.g. Exa) with the user's own key. Moot now that Continue is gone.
-6. **Proposed-API fragility.** If `languageModelThinkingPart` changes, thinking silently disappears.
+5. **Proposed-API fragility.** If `languageModelThinkingPart` changes, thinking silently disappears.
    The guard prevents breakage, not disappearance.
 
 ---

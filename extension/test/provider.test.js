@@ -199,9 +199,39 @@ test('a 401 tells the user how to fix it', async () => {
         { report() {} },
         { onCancellationRequested: () => ({ dispose() {} }) },
       ),
-      /npx deepvariance-vscode/,
+      /npx @deepvariance\/vscode/,
     );
   } finally {
     globalThis.fetch = real;
   }
+});
+
+test('images are capped at the server limit, keeping the most recent', () => {
+  // The cap is per request, and a request carries the whole conversation.
+  const img = (n) => new LanguageModelDataPart(Buffer.from([n]), 'image/png');
+  const messages = [
+    { role: USER, content: [new LanguageModelTextPart('first'), img(1), img(2)] },
+    { role: USER, content: [img(3), img(4), img(5), new LanguageModelTextPart('what is this?')] },
+  ];
+
+  const out = toOpenAIMessages(messages);
+  const parts = out.flatMap((m) => (Array.isArray(m.content) ? m.content : []));
+  const images = parts.filter((p) => p.type === 'image_url');
+  const notes = parts.filter((p) => p.type === 'text' && p.text.includes('left out'));
+
+  assert.equal(images.length, 4, 'never send more images than the server accepts');
+  assert.equal(notes.length, 1, 'the dropped image is announced, not silently swallowed');
+
+  // The kept images must be the LAST four (2,3,4,5) — the oldest is the one dropped.
+  const kept = images.map((i) => i.image_url.url.split(',')[1]);
+  assert.deepEqual(kept, [2, 3, 4, 5].map((n) => Buffer.from([n]).toString('base64')));
+});
+
+test('a conversation under the cap is untouched', () => {
+  const img = new LanguageModelDataPart(Buffer.from([9]), 'image/png');
+  const out = toOpenAIMessages([{ role: USER, content: [new LanguageModelTextPart('hi'), img] }]);
+  const parts = out.flatMap((m) => (Array.isArray(m.content) ? m.content : []));
+
+  assert.equal(parts.filter((p) => p.type === 'image_url').length, 1);
+  assert.equal(parts.filter((p) => p.type === 'text' && p.text.includes('left out')).length, 0);
 });

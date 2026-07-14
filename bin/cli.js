@@ -15,7 +15,7 @@ const HELP = `
   deepvariance-vscode — set up ${MODEL_NAME} in VS Code
 
   Usage
-    npx deepvariance-vscode [options]
+    npx @deepvariance/vscode [options]
 
   Options
     --health           Only check that the gateway is up, then exit

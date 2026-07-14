@@ -1,21 +1,40 @@
 import * as vscode from 'vscode';
 
 import { normalizeGateway } from '../../src/gateway.js';
-import { CONTEXT_WINDOW, MAX_OUTPUT_TOKENS, MODEL_FAMILY, MODEL_ID, MODEL_NAME } from './constants.js';
+import { CONTEXT_WINDOW, MAX_IMAGES_PER_PROMPT, MAX_OUTPUT_TOKENS, MODEL_FAMILY, MODEL_ID, MODEL_NAME } from './constants.js';
 
 const ROLE_USER = vscode.LanguageModelChatMessageRole.User;
+
+const isImage = (part) => part instanceof vscode.LanguageModelDataPart && part.mimeType?.startsWith('image/');
+
+const DROPPED_IMAGE_NOTE = `[An earlier image was left out: this model accepts at most ${MAX_IMAGES_PER_PROMPT} images per request, and the whole conversation counts toward that.]`;
+
+/**
+ * The server runs with --limit-mm-per-prompt {"image": N}, and the limit is per *request* — which
+ * carries the entire conversation. So a chat accumulates images until it trips the cap, and every
+ * later turn would fail identically: the conversation would be permanently dead.
+ *
+ * Keep the most recent N and replace the older ones with a note. Losing the oldest image degrades
+ * the answer; failing the request ends the conversation.
+ */
+function keepRecentImages(messages, max = MAX_IMAGES_PER_PROMPT) {
+  const keys = [];
+  messages.forEach((message, m) => (message.content ?? []).forEach((part, p) => isImage(part) && keys.push(`${m}:${p}`)));
+  return new Set(keys.slice(-max));
+}
 
 /** VS Code hands us its own part classes; map them onto the OpenAI chat-completions wire format. */
 export function toOpenAIMessages(messages) {
   const out = [];
+  const keptImages = keepRecentImages(messages);
 
-  for (const message of messages) {
+  messages.forEach((message, m) => {
     const parts = message.content ?? [];
     const text = [];
     const content = [];
     const toolCalls = [];
 
-    for (const part of parts) {
+    parts.forEach((part, p) => {
       if (part instanceof vscode.LanguageModelTextPart) {
         text.push(part.value);
         content.push({ type: 'text', text: part.value });
@@ -28,11 +47,17 @@ export function toOpenAIMessages(messages) {
       } else if (part instanceof vscode.LanguageModelToolResultPart) {
         // A tool result is its own message on the wire, and must precede the next user turn.
         out.push({ role: 'tool', tool_call_id: part.callId, content: flattenToolResult(part.content) });
-      } else if (part instanceof vscode.LanguageModelDataPart && part.mimeType?.startsWith('image/')) {
-        const base64 = Buffer.from(part.data).toString('base64');
-        content.push({ type: 'image_url', image_url: { url: `data:${part.mimeType};base64,${base64}` } });
+      } else if (isImage(part)) {
+        if (keptImages.has(`${m}:${p}`)) {
+          const base64 = Buffer.from(part.data).toString('base64');
+          content.push({ type: 'image_url', image_url: { url: `data:${part.mimeType};base64,${base64}` } });
+        } else {
+          // Say so out loud: a silently missing image produces a confidently wrong answer.
+          text.push(DROPPED_IMAGE_NOTE);
+          content.push({ type: 'text', text: DROPPED_IMAGE_NOTE });
+        }
       }
-    }
+    });
 
     if (message.role === ROLE_USER) {
       // Send the array form only when there is an image; plain text keeps the payload simple.
@@ -45,7 +70,7 @@ export function toOpenAIMessages(messages) {
       if (toolCalls.length) assistant.tool_calls = toolCalls;
       out.push(assistant);
     }
-  }
+  });
 
   return out;
 }
@@ -137,7 +162,7 @@ export class DeepVarianceProvider {
 
   async provideLanguageModelChatResponse(model, messages, options, progress, token) {
     const apiKey = await this.apiKey();
-    if (!apiKey) throw new Error('No API key. Run "Deep Variance: Set Up" or `npx deepvariance-vscode`.');
+    if (!apiKey) throw new Error('No API key. Run "Deep Variance: Set Up" or `npx @deepvariance/vscode`.');
 
     const controller = new AbortController();
     const cancel = token.onCancellationRequested(() => controller.abort());
@@ -168,7 +193,7 @@ export class DeepVarianceProvider {
       if (!response.ok) {
         const detail = await response.text();
         if (response.status === 401) {
-          throw new Error(`The gateway rejected your API key (401). Re-run \`npx deepvariance-vscode\` to get a new one. ${detail}`);
+          throw new Error(`The gateway rejected your API key (401). Re-run \`npx @deepvariance/vscode\` to get a new one. ${detail}`);
         }
         throw new Error(`The gateway returned HTTP ${response.status}. ${detail}`);
       }

@@ -6,7 +6,7 @@
 
 <p align="center">
   <a href="https://github.com/deepvariance/vscode-extension/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/deepvariance/vscode-extension/actions/workflows/ci.yml/badge.svg"></a>
-  <a href="https://www.npmjs.com/package/deepvariance-vscode"><img alt="npm" src="https://img.shields.io/npm/v/deepvariance-vscode?color=cb3837&logo=npm"></a>
+  <a href="https://www.npmjs.com/package/@deepvariance/vscode"><img alt="npm" src="https://img.shields.io/npm/v/%40deepvariance%2Fvscode?color=cb3837&logo=npm"></a>
   <img alt="node" src="https://img.shields.io/badge/node-%E2%89%A518-339933?logo=node.js&logoColor=white">
   <img alt="vscode" src="https://img.shields.io/badge/vscode-%E2%89%A51.104-007ACC?logo=visualstudiocode&logoColor=white">
   <img alt="status" src="https://img.shields.io/badge/status-beta-orange">
@@ -15,7 +15,7 @@
 ---
 
 ```bash
-npx deepvariance-vscode
+npx @deepvariance/vscode
 ```
 
 Asks for your email. Nothing else. Then quit and reopen VS Code and pick **Qwen3.5 27B** in the Chat
@@ -39,8 +39,8 @@ model picker.
 Requires VS Code ≥ 1.104 and Node ≥ 18.
 
 ```bash
-npx deepvariance-vscode          # interactive
-npx deepvariance-vscode --yes --email you@example.com   # unattended
+npx @deepvariance/vscode          # interactive
+npx @deepvariance/vscode --yes --email you@example.com   # unattended
 ```
 
 Forks (Cursor, Windsurf, VSCodium, Insiders) are detected too.
@@ -48,7 +48,7 @@ Forks (Cursor, Windsurf, VSCodium, Insiders) are detected too.
 ## Usage
 
 ```bash
-npx deepvariance-vscode --health   # check the gateway, change nothing, exit non-zero if down
+npx @deepvariance/vscode --health   # check the gateway, change nothing, exit non-zero if down
 ```
 
 | Flag | |
