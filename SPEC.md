@@ -474,10 +474,11 @@ to users unattended.
 - **A `404` on publish is almost always auth**, not a missing package: npm returns 404 when it cannot
   match the run to a trusted publisher. Check org, repo, and workflow filename character for
   character.
-- **No provenance while the repo is private.** npm does not attest builds from private repos, even
-  for public packages. This is a real cost — the attestation proving *this tarball was built from
-  this commit by this workflow* is much of the value of trusted publishing. Flip the repo public and
-  it is generated automatically, no flag needed.
+- **No provenance, and that is a decision, not an oversight.** npm does not attest builds from
+  private repos, even for public packages. We keep the repo private and accept the loss: trusted
+  publishing still removes the standing credential, which is the threat we care about. If the repo
+  ever goes public, provenance is generated automatically — no flag, no code change. Don't add
+  `--provenance` before then; it hard-fails on a private repo.
 - **Bump `extension/package.json` and re-run `npm run build:extension` whenever the extension
   changes.** VS Code will not reinstall an unchanged version, and CI fails if the committed `.vsix`
   does not match.
