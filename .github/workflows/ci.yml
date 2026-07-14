@@ -101,10 +101,13 @@ jobs:
             echo "publishing $name@$version"
           fi
 
-      # prepack rebuilds dist/, so the tarball can never be stale relative to the source.
+      # Build explicitly: npm validates `bin` before it runs prepack, so a missing dist/cli.js
+      # warns ("No bin file found") even though prepack would have produced it moments later.
       # No --provenance: npm only generates it for public repos, and this one is private.
       - name: Publish
         if: steps.check.outputs.published == 'false'
-        run: npm publish --access public
+        run: |
+          npm run build
+          npm publish --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
