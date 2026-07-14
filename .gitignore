@@ -2,6 +2,7 @@ node_modules/
 dist/
 extension/node_modules/
 extension/dist/
+extension/README.md
 .agents/
 .claude/
 skills-lock.json

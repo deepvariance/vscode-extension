@@ -427,21 +427,60 @@ Already done (commit "drop the Continue path"). `src/continue-config.js`, `src/v
 `--target` flag, and the Continue install helpers are gone. VS Code's built-in Chat is the only
 target. Nothing in the tree references Continue any more.
 
-### Publish
+### Publish / release
 
 **Automatic.** Bump `version` in `package.json`, merge to `main`, and CI publishes. It checks npm
 first, so every other commit to `main` is a no-op rather than a failed re-publish.
 
-Authenticated by **npm trusted publishing (OIDC)** — no tokens, no secrets. Requires a one-time
-bootstrap; see `RELEASING.md`. Until the trusted publisher is registered and the
-`NPM_TRUSTED_PUBLISHING` repo variable is set to `true`, CI stays green and warns instead of
-publishing.
+Authenticated by **npm trusted publishing (OIDC)**: GitHub mints a short-lived token per workflow
+run. There is no `NPM_TOKEN` and no secret to leak or rotate.
 
 The tarball is **bundle-only**: `dist/cli.js` (minified, `@clack/prompts` bundled in, zero runtime
-deps) plus the `.vsix`. No `src/`, no `bin/`, no sourcemaps — CI fails if any leak in. `prepack`
-rebuilds `dist/` so it can never be stale.
+deps) plus the `.vsix`. No `src/`, no `bin/`, no sourcemaps — CI fails if any leak in. No marketplace
+account is needed; the `.vsix` rides inside the npm tarball.
 
-No marketplace account is needed: the `.vsix` rides inside the npm tarball.
+#### Why not a token
+
+An npm **automation token bypasses 2FA by design** — a standing credential that publishes with no
+human factor. Leak it (CI logs, a compromised third-party action, a maintainer's laptop) and an
+attacker publishes as you. That is the mechanism behind most recent npm supply-chain compromises.
+OIDC mints a token scoped to this repo and this workflow, useless once the run ends.
+
+#### One-time bootstrap
+
+A trusted publisher **cannot be registered for a package that does not exist**, so the first release
+is manual. Until step 4, CI warns and stays green instead of 404ing on every commit.
+
+1. **Publish once by hand:** `npm login && npm run build && npm publish --access public`
+2. **Register the publisher** on npmjs.com → package → *Settings* → *Trusted publisher*:
+   GitHub Actions · org `deepvariance` · repo `vscode-extension` · workflow `ci.yml` · environment
+   empty. `repository.url` in `package.json` must match the repo exactly or npm rejects the OIDC
+   token.
+3. **Slam the door on tokens** — npmjs.com → package → *Settings* → **Publishing access** →
+   **"Require two-factor authentication and disallow tokens"**. This is the step that actually buys
+   the security and is the easy one to skip: adopting OIDC does nothing on its own if a leaked token
+   can still publish. The restriction applies to token auth only — the trusted publisher keeps
+   working.
+4. **Switch CI over:** `gh variable set NPM_TRUSTED_PUBLISHING --body true`
+
+*Optional, maximum paranoia:* configure the trusted publisher to allow only `npm stage publish`. CI
+then stages a release and a human approves it with an interactive 2FA prompt. `npm stage approve`
+cannot use an OIDC token — it requires proof of presence — so even a compromised workflow cannot ship
+to users unattended.
+
+#### Gotchas
+
+- **Requires npm ≥ 11.5.1.** `setup-node` ships npm 10.x, so CI upgrades it in the job.
+- **A `404` on publish is almost always auth**, not a missing package: npm returns 404 when it cannot
+  match the run to a trusted publisher. Check org, repo, and workflow filename character for
+  character.
+- **No provenance while the repo is private.** npm does not attest builds from private repos, even
+  for public packages. This is a real cost — the attestation proving *this tarball was built from
+  this commit by this workflow* is much of the value of trusted publishing. Flip the repo public and
+  it is generated automatically, no flag needed.
+- **Bump `extension/package.json` and re-run `npm run build:extension` whenever the extension
+  changes.** VS Code will not reinstall an unchanged version, and CI fails if the committed `.vsix`
+  does not match.
 
 ---
 

@@ -68,7 +68,7 @@ jobs:
       # dist/ is gitignored, so the bundle has to be built before it can be packaged.
       - name: Packaging the extension still works
         working-directory: extension
-        run: npm run build && npx vsce package --allow-missing-repository --skip-license --out /tmp/check.vsix
+        run: npm run build && cp ../README.md README.md && npx vsce package --skip-license --out /tmp/check.vsix
 
   publish:
     needs: [test, package]

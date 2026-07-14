@@ -105,8 +105,8 @@ npm run build:extension     # rebuild + repackage the bundled .vsix (commit it)
 
 **Releasing:** bump `version` in `package.json` and merge to `main`. CI publishes it via npm
 **trusted publishing** (OIDC) — no tokens anywhere. Any other commit to `main` is a no-op; it only
-publishes when the version isn't already on npm. See [RELEASING.md](./RELEASING.md) for the one-time
-setup.
+publishes when the version isn't already on npm. The one-time bootstrap is in
+[SPEC.md](./SPEC.md#publish--release).
 
 **Bump `extension/package.json` when the extension changes** — VS Code won't reinstall the same
 version, and CI fails if the committed `.vsix` doesn't match.
