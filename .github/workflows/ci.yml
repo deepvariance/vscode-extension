@@ -89,7 +89,9 @@ jobs:
 
   publish:
     needs: [test, package]
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # Pushes to main release automatically. workflow_dispatch is the manual re-try — a release that
+    # failed for an environment reason shouldn't need an empty commit to retry.
+    if: github.ref == 'refs/heads/main' && (github.event_name == 'push' || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
     permissions:
       contents: read
