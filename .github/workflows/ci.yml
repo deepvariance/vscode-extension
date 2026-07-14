@@ -55,6 +55,7 @@ jobs:
       - name: The npm tarball ships the .vsix
         run: npm pack --dry-run 2>&1 | grep -q '\.vsix' || { echo "::error::npm pack does not include the .vsix"; exit 1; }
 
+      # dist/ is gitignored, so the bundle has to be built before it can be packaged.
       - name: Packaging the extension still works
         working-directory: extension
-        run: npx vsce package --allow-missing-repository --skip-license --out /tmp/check.vsix
+        run: npm run build && npx vsce package --allow-missing-repository --skip-license --out /tmp/check.vsix
