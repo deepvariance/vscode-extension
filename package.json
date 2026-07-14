@@ -25,5 +25,13 @@
   "devDependencies": {
     "@clack/prompts": "^0.11.0",
     "esbuild": "^0.24.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepvariance/vscode-extension.git"
+  },
+  "bugs": {
+    "url": "https://github.com/deepvariance/vscode-extension/issues"
+  },
+  "homepage": "https://github.com/deepvariance/vscode-extension#readme"
 }

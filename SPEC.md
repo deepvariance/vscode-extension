@@ -432,7 +432,10 @@ target. Nothing in the tree references Continue any more.
 **Automatic.** Bump `version` in `package.json`, merge to `main`, and CI publishes. It checks npm
 first, so every other commit to `main` is a no-op rather than a failed re-publish.
 
-Needs the **`NPM_TOKEN`** repo secret (an npm automation token). Without it the publish step fails.
+Authenticated by **npm trusted publishing (OIDC)** — no tokens, no secrets. Requires a one-time
+bootstrap; see `RELEASING.md`. Until the trusted publisher is registered and the
+`NPM_TRUSTED_PUBLISHING` repo variable is set to `true`, CI stays green and warns instead of
+publishing.
 
 The tarball is **bundle-only**: `dist/cli.js` (minified, `@clack/prompts` bundled in, zero runtime
 deps) plus the `.vsix`. No `src/`, no `bin/`, no sourcemaps — CI fails if any leak in. `prepack`
