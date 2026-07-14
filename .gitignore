@@ -3,3 +3,4 @@ extension/node_modules/
 extension/dist/
 .agents/
 .claude/
+skills-lock.json
