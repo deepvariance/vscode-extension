@@ -267,6 +267,28 @@ case "enable-proposed-api":
 `vscode.LanguageModelThinkingPart` being defined and silently drops thinking if it isn't — it
 degrades, it never breaks, and it never dumps raw reasoning into the answer as plain text.
 
+### 3.5 ⚠ Agent mode needs a BYOK utility model (VS Code 1.128+)
+
+VS Code 1.128+ agent mode invokes a small **utility model** for background tasks (titles, summaries)
+separate from the main model. With a BYOK model and no Copilot plan, its default
+`copilot-utility-small` is unavailable, so agent mode errors: *"No utility model is configured for
+'copilot-utility-small' while the selected main agent model is BYOK."* This hit real testers on
+every release before 0.1.7 — it's not our bug (it affects all BYOK providers, e.g. DeepSeek) but it
+blocks agent mode out of the box.
+
+**Fix, applied for the user:** the extension sets `chat.byokUtilityModelDefault: "mainAgent"` on
+activation (`ensureByokUtilityDefault` in `extension.js`), which routes utility calls to the selected
+BYOK model. Guarded: it skips VS Code versions where the setting doesn't exist (update() would throw)
+and never overrides a value the user set — it only flips the default `none`.
+
+> **Tool calls in agent mode are a separate, gateway-side issue.** Qwen3.6 emits tool calls in the
+> `<tool_call><function=name><parameter=key>…` format, but the gateway's vLLM `--tool-call-parser`
+> (tuned for 3.5) doesn't parse it, so `tool_calls` comes back empty and the call leaks into
+> `content` as raw text — the agent "finishes" without acting. Fix is on the gateway:
+> `--tool-call-parser qwen3_coder`. `tool_choice:"required"` works (constrained decoding bypasses the
+> parser); `auto` (what agent mode uses) does not. A client-side fallback parser is possible but is a
+> workaround for a server misconfiguration — prefer the gateway fix.
+
 ---
 
 ## 4. Architecture

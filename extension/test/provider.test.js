@@ -42,6 +42,8 @@ const vscodeStub = {
   lm: { registerLanguageModelChatProvider: () => ({ dispose() {} }) },
   commands: { registerCommand: () => ({ dispose() {} }) },
   window: {},
+  workspace: { getConfiguration: () => ({ inspect: () => undefined, update: async () => {} }) },
+  ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
   ProgressLocation: { Notification: 15 },
 };
 
@@ -56,9 +58,38 @@ function load() {
   }
 }
 
-const { toOpenAIMessages, toOpenAITools, DeepVarianceProvider } = load();
+const { toOpenAIMessages, toOpenAITools, DeepVarianceProvider, ensureByokUtilityDefault } = load();
 const USER = 1;
 const ASSISTANT = 2;
+
+/** Fake `chat` configuration: records update() calls, seeds inspect(). */
+function fakeConfig(inspectResult) {
+  const updates = [];
+  return {
+    inspect: () => inspectResult,
+    update: async (key, value, target) => updates.push({ key, value, target }),
+    updates,
+  };
+}
+
+test('byok utility: flips the default none -> mainAgent so agent mode does not error', async () => {
+  const cfg = fakeConfig({ defaultValue: 'none', globalValue: undefined });
+  const changed = await ensureByokUtilityDefault(cfg);
+  assert.equal(changed, true);
+  assert.deepEqual(cfg.updates, [{ key: 'byokUtilityModelDefault', value: 'mainAgent', target: 1 }]);
+});
+
+test('byok utility: never overrides a value the user set', async () => {
+  const cfg = fakeConfig({ defaultValue: 'none', globalValue: 'copilot' });
+  assert.equal(await ensureByokUtilityDefault(cfg), false);
+  assert.deepEqual(cfg.updates, [], 'must not touch a user-chosen value');
+});
+
+test('byok utility: no-op when the setting is absent (older VS Code)', async () => {
+  const cfg = fakeConfig(undefined); // inspect() returns undefined -> setting not registered
+  assert.equal(await ensureByokUtilityDefault(cfg), false);
+  assert.deepEqual(cfg.updates, [], 'update() would throw on an unregistered key');
+});
 
 test('a plain user turn becomes a plain string message', () => {
   const out = toOpenAIMessages([{ role: USER, content: [new LanguageModelTextPart('hello')] }]);

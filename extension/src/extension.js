@@ -12,6 +12,25 @@ async function storeKey(context, { apiKey, gateway, email }) {
 }
 
 /**
+ * VS Code 1.128+ agent mode calls a small "utility model" for background tasks (titles, etc.). With
+ * a BYOK model and no Copilot plan its default `copilot-utility-small` is unavailable, so agent mode
+ * errors: "No utility model is configured for 'copilot-utility-small' …". The fix is the setting
+ * `chat.byokUtilityModelDefault: mainAgent`, which routes utility calls to the selected BYOK model.
+ * We set it on the user's behalf so testers don't have to.
+ *
+ * Guarded: skip if the setting doesn't exist in this VS Code version (update() would throw), and
+ * never override a value the user set themselves — only flip the default `none`.
+ */
+export async function ensureByokUtilityDefault(configuration = vscode.workspace.getConfiguration('chat')) {
+  const info = configuration.inspect('byokUtilityModelDefault');
+  if (!info || info.defaultValue === undefined) return false; // setting not in this VS Code version
+  const current = info.globalValue ?? info.workspaceValue ?? info.defaultValue;
+  if (current !== 'none') return false; // user chose one, or already non-default — leave it
+  await configuration.update('byokUtilityModelDefault', 'mainAgent', vscode.ConfigurationTarget.Global);
+  return true;
+}
+
+/**
  * The CLI leaves the key in ~/.deepvariance/handoff.json. Move it into SecretStorage and
  * delete the file, so the plaintext copy lives for seconds rather than forever.
  */
@@ -77,6 +96,13 @@ export async function activate(context) {
     vscode.commands.registerCommand('deepvariance.setup', () => setupCommand(context, provider)),
     vscode.commands.registerCommand('deepvariance.signOut', () => signOutCommand(context, provider)),
   );
+
+  // Best-effort: never let a config write break activation.
+  try {
+    await ensureByokUtilityDefault();
+  } catch {
+    /* leave it to the user's manual setting */
+  }
 
   await importHandoff(context, provider);
 }
