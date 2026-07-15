@@ -26,7 +26,7 @@ Palette and run **Developer: Reload Window**. Open Chat and pick the model from 
 
 | Model | Context |
 |---|---|
-| **Qwen3.5 27B** | 131k tokens |
+| **Qwen3.6 27B** | 131k tokens |
 
 ## Capabilities
 
