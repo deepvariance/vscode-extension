@@ -75,7 +75,7 @@ jobs:
         working-directory: extension
         run: |
           npm run build
-          cp ../npm-readme.md README.md
+          cp ../README.md README.md
           npx vsce package --skip-license --out /tmp/check.vsix
           if unzip -l /tmp/check.vsix | grep -qE 'src/|\.map'; then
             echo "::error::source or sourcemaps leaked into the .vsix"; unzip -l /tmp/check.vsix; exit 1
@@ -135,11 +135,10 @@ jobs:
           echo "::warning::trusted publisher on npmjs.com (repo deepvariance/vscode-extension,"
           echo "::warning::workflow ci.yml), then set: gh variable set NPM_TRUSTED_PUBLISHING --body true"
 
-      # No token, no --provenance: OIDC authenticates the run, and npm declines to attest a
-      # private repo anyway. Build explicitly — npm validates `bin` before it runs prepack.
+      # OIDC authenticates the run — no token. Provenance is generated because the repo is public.
+      # Build explicitly: npm validates `bin` before it runs prepack.
       - name: Publish (trusted publishing / OIDC)
         if: steps.check.outputs.published == 'false' && vars.NPM_TRUSTED_PUBLISHING == 'true'
         run: |
           npm run build
-          cp npm-readme.md README.md   # npm gets the product readme; the repo README keeps the CI badge
-          npm publish --access public
+          npm publish --access public --provenance
