@@ -29,16 +29,18 @@ function fallbackPaths(bin) {
 }
 
 /**
- * Windows needs a shell to run .cmd shims; quote paths that contain spaces.
+ * Windows needs a shell to run .cmd shims (node blocks spawning .cmd without one). Under a shell,
+ * every argument with whitespace must be quoted, not just the binary — the vsix path under npx is
+ * `C:\Users\<user>\AppData\...`, and a spaced username would otherwise split the token and fail.
  *
  * stdin is 'ignore', never inherited: an interactive prompt library may have put the
  * shared stdin into raw/flowing mode, and a synchronous child that inherits it blocks
  * forever. The timeout is the backstop for an editor CLI that wedges for its own reasons.
  */
-function run(bin, args, timeout = 20_000) {
+function run(bin, args, timeout = 12_000) {
   const shell = IS_WINDOWS;
-  const command = shell && bin.includes(' ') ? `"${bin}"` : bin;
-  return spawnSync(command, args, { shell, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout });
+  const quote = (value) => (shell && /\s/.test(value) ? `"${value}"` : value);
+  return spawnSync(quote(bin), args.map(quote), { shell, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout });
 }
 
 function works(bin) {
