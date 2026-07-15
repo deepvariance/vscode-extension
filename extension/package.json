@@ -1,8 +1,8 @@
 {
   "name": "deepvariance-vscode",
-  "displayName": "Deep Variance — Qwen3.5 27B",
-  "description": "Adds Qwen3.5 27B to VS Code's Chat model picker.",
-  "version": "0.3.5",
+  "displayName": "Deep Variance — Qwen3.6 27B",
+  "description": "Adds Qwen3.6 27B to VS Code's Chat model picker.",
+  "version": "0.3.6",
   "publisher": "deepvariance",
   "license": "MIT",
   "engines": {
@@ -26,7 +26,7 @@
     "commands": [
       {
         "command": "deepvariance.setup",
-        "title": "Set Up Qwen3.5 27B",
+        "title": "Set Up Qwen3.6 27B",
         "category": "Deep Variance"
       },
       {

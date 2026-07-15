@@ -95,22 +95,26 @@ type only their email. Override with `--invite` / `DEEPVARIANCE_INVITE` when it 
 
 **Security note for the gateway owner:** anyone who reads that npm tarball can mint keys.
 
-### The model
+### The model — and why there is no stable alias
 
-The gateway serves **exactly one** model: `Qwen/Qwen3.5-27B-FP8` (vLLM, `max_model_len: 131072`).
+The gateway serves **exactly one** model. As of 2026-07-15 that is `Qwen/Qwen3.6-27B-FP8` (vLLM,
+`max_model_len: 131072`). It has changed twice: `Qwen3-VL-30B` → `Qwen3.5-27B` → `Qwen3.6-27B`.
 
-| `model` value sent | Result |
+| `model` value sent (now) | Result |
 |---|---|
-| `qwen-coder` | **200** — a gateway-side **alias**. Use this. |
-| `Qwen/Qwen3.5-27B-FP8` | 200 — the real id also works |
-| `Qwen/Qwen3-VL-30B-A3B-Thinking` | **404 — "does not exist"** |
+| `Qwen/Qwen3.6-27B-FP8` | **200** — the exact served id. Send this. |
+| `qwen-coder` | **404** — this alias was **removed** on the 3.5 → 3.6 swap |
+| `Qwen/Qwen3.5-27B-FP8` | 404 — the previous model id is gone |
 
-**Always send the alias `qwen-coder`.** It survives the gateway swapping the model underneath it;
-a pinned real id does not. (This is not hypothetical — the published `@deepvariance/opencode`
-package pins `Qwen/Qwen3-VL-30B-A3B-Thinking` and is **broken in production right now** because of
-exactly this. See §10.)
+> **The alias theory was wrong.** This file used to say "always send the alias `qwen-coder`, it
+> survives model swaps." It did not: the gateway removed the alias *and* changed the model in the
+> same swap, 404-ing every published extension in the field until a release fixed it. **Reality: there
+> is no alias. Pin the exact served id (`MODEL_ID` in `src/model.js`) and cut a release whenever the
+> gateway swaps models.** A swap silently breaks the published package until then — this is the single
+> most fragile coupling in the project. The lasting fix is runtime discovery (query `GET /v1/models`
+> and use `data[0].id`); see §10.
 
-Capabilities, each verified live rather than assumed:
+Capabilities, each verified live on the current model rather than assumed:
 
 | Capability | Verified how |
 |---|---|
@@ -154,7 +158,7 @@ CLI (`jl list`, `jl pause <id> -y`, `jl resume <id> -y`, `jl exec <id> <cmd>`).
 vLLM is launched with (this explains most of §2):
 
 ```
---model Qwen/Qwen3.5-27B-FP8  --max-model-len 131072   # = CONTEXT_WINDOW
+--model Qwen/Qwen3.6-27B-FP8  --max-model-len 131072   # = CONTEXT_WINDOW (illustrative; observed on 3.5, unchanged behaviourally on 3.6)
 --reasoning-parser qwen3                               # = why `delta.reasoning` exists
 --tool-call-parser qwen3_xml                           # = why tool calling works
 --limit-mm-per-prompt {"image": 4}                     # = MAX 4 IMAGES PER PROMPT
@@ -285,7 +289,7 @@ VS Code launches (full restart)
     ├─ consumeHandoff()        read key → SecretStorage → DELETE the file
     └─ registerLanguageModelChatProvider('deepvariance', provider)
          ↓
-    Chat model picker → "Qwen3.5 27B"
+    Chat model picker → "Qwen3.6 27B"
 ```
 
 ### Why the handoff file
@@ -401,8 +405,9 @@ until setup re-runs.
 
 ### Swap the backing model
 
-If the gateway keeps the `qwen-coder` alias pointed at the new model: **change nothing.** That is the
-entire reason we send the alias.
+There is no alias to lean on (the gateway removed `qwen-coder`), so a model swap **always** requires
+a code change: set `MODEL_ID` in `src/model.js` to the new `GET /v1/models` id, and release. Verify
+the id with `curl .../v1/models -H "Authorization: Bearer <key>"` first.
 
 If the display name or limits change: **`src/model.js` only** — the extension re-exports it, so there
 is no second copy. Then `npm run build:extension`.
@@ -543,7 +548,8 @@ never prompting, backup-before-overwrite.
    to completion. Low risk, but not zero.
 2. **`@deepvariance/opencode@0.2.1` is broken in production.** It pins
    `Qwen/Qwen3-VL-30B-A3B-Thinking`, which the gateway 404s. Every opencode tester is dead right now.
-   Fix: send `qwen-coder`. (Owned by the gateway team, not this repo.)
+   Both its pinned id and the old `qwen-coder` alias now 404; the only working value is the
+   current served id. (Owned by the gateway team, not this repo.)
 3. **Published.** `@deepvariance/vscode` is live on npm (v0.1.4+) via OIDC trusted publishing with
    provenance; `npx @deepvariance/vscode` works for testers. Releases are automatic on a version bump
    merged to `main`.
@@ -553,6 +559,14 @@ never prompting, backup-before-overwrite.
    fix means an MCP search server (e.g. Exa) with the user's own key. Moot now that Continue is gone.
 5. **Proposed-API fragility.** If `languageModelThinkingPart` changes, thinking silently disappears.
    The guard prevents breakage, not disappearance.
+6. **Pinned model id is the biggest fragility (recommended: runtime discovery).** The gateway has
+   swapped the served model twice and removed the `qwen-coder` alias, and each swap 404s the
+   published extension in the field until a manual `MODEL_ID` bump + release (this is why 0.1.6 exists).
+   The durable fix is for the provider's `provideLanguageModelChatInformation` to query
+   `GET /v1/models` with the key and use `data[0].id` + `max_model_len`, falling back to the pinned
+   `MODEL_ID` only when the gateway is unreachable. ~20 lines; it would have made both swaps a no-op.
+   Deferred to keep this release small and avoid adding a network call to the picker-population path
+   without UX testing.
 
 ---
 
@@ -578,7 +592,8 @@ Each of these cost real debugging time. They are all now covered by a test or a 
 - Health-check the gateway before installing or writing anything.
 - Back up any file before overwriting it (timestamped), and merge rather than replace files shared
   with other tools (`chatLanguageModels.json`, `argv.json`).
-- Send the model alias `qwen-coder`, never a pinned real model id.
+- Send the exact model id from `GET /v1/models` (there is no stable alias); update `MODEL_ID` and
+  release on every gateway model swap.
 - Verify a gateway claim with `curl` before encoding it in code. Every fact in §2 is re-runnable.
 - Sandbox `HOME` when testing anything that writes config.
 - Bump `extension/package.json` version when the extension changes, or VS Code won't reinstall it.
@@ -608,7 +623,9 @@ State these so they can be corrected rather than silently inherited:
 
 1. Testers are on VS Code. Forks (Cursor, Windsurf, VSCodium, Insiders) are detected and the VSIX
    installs into them, but the provider is only verified on VS Code proper.
-2. The gateway stays OpenAI-compatible and keeps the `qwen-coder` alias.
+2. The gateway stays OpenAI-compatible. It does NOT keep a stable model id or alias — it has
+   swapped the served model twice and removed the `qwen-coder` alias, so the pinned `MODEL_ID` must be
+   updated + released on each swap (or replaced with runtime discovery).
 3. The shared invite model persists (one token for all testers, email is the only per-user input).
 4. Testers have Node ≥ 18 available for `npx`.
 5. The gateway is a demo: no SLA, and it *has* been down mid-session (Cloudflare `530 / error 1033`).

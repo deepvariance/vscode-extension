@@ -1,7 +1,7 @@
 {
   "name": "@deepvariance/vscode",
-  "version": "0.1.5",
-  "description": "One-command setup for the Qwen3.5 27B coding assistant in VS Code's built-in Chat.",
+  "version": "0.1.6",
+  "description": "One-command setup for the Qwen3.6 27B coding assistant in VS Code's built-in Chat.",
   "type": "module",
   "bin": {
     "deepvariance-vscode": "dist/cli.js"

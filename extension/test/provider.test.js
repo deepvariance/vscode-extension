@@ -129,7 +129,7 @@ test('no model is offered until a key exists', async () => {
   const withKey = new DeepVarianceProvider({ secrets: { get: async () => 'sk-wh-x' }, globalState: { get: () => undefined } });
   const [model] = await withKey.provideLanguageModelChatInformation({ silent: true });
 
-  assert.equal(model.id, 'qwen-coder', 'must be the gateway alias');
+  assert.equal(model.id, 'Qwen/Qwen3.6-27B-FP8', 'the exact served id, no alias');
   assert.equal(model.capabilities.toolCalling, true);
   assert.equal(model.capabilities.imageInput, true);
   assert.ok(model.maxInputTokens > 0 && model.maxInputTokens < 131072);
@@ -167,7 +167,7 @@ test('a streamed response emits text parts and a completed tool call', async () 
 
     const reported = [];
     await provider.provideLanguageModelChatResponse(
-      { id: 'qwen-coder', maxOutputTokens: 100 },
+      { id: 'Qwen/Qwen3.6-27B-FP8', maxOutputTokens: 100 },
       [{ role: USER, content: [new LanguageModelTextPart('hi')] }],
       { tools: [], toolMode: 1 },
       { report: (part) => reported.push(part) },
@@ -193,7 +193,7 @@ test('a 401 tells the user how to fix it', async () => {
     const provider = new DeepVarianceProvider({ secrets: { get: async () => 'sk-wh-bad' }, globalState: { get: () => undefined } });
     await assert.rejects(
       provider.provideLanguageModelChatResponse(
-        { id: 'qwen-coder', maxOutputTokens: 100 },
+        { id: 'Qwen/Qwen3.6-27B-FP8', maxOutputTokens: 100 },
         [{ role: USER, content: [new LanguageModelTextPart('hi')] }],
         { tools: [] },
         { report() {} },
