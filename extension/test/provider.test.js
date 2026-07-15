@@ -235,3 +235,16 @@ test('a conversation under the cap is untouched', () => {
   assert.equal(parts.filter((p) => p.type === 'image_url').length, 1);
   assert.equal(parts.filter((p) => p.type === 'text' && p.text.includes('left out')).length, 0);
 });
+
+test('an image inside a tool result becomes a short placeholder, not a byte blob', () => {
+  const out = toOpenAIMessages([
+    {
+      role: USER,
+      content: [new LanguageModelToolResultPart('call_1', [new LanguageModelDataPart(Buffer.from([1, 2, 3, 4]), 'image/png')])],
+    },
+  ]);
+
+  const toolMsg = out.find((m) => m.role === 'tool');
+  assert.equal(toolMsg.content, '[tool returned an image]');
+  assert.ok(!/\d,\d/.test(toolMsg.content), 'must not dump the raw Uint8Array');
+});
