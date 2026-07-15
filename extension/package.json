@@ -39,7 +39,7 @@
   "scripts": {
     "build": "node esbuild.mjs",
     "test": "node --test test/*.test.js",
-    "package": "npm run build && cp ../README.npm.md README.md && vsce package --skip-license"
+    "package": "npm run build && cp ../npm-readme.md README.md && vsce package --skip-license"
   },
   "devDependencies": {
     "@types/vscode": "^1.104.0",

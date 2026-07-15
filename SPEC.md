@@ -467,7 +467,7 @@ back, minification or not. Don't turn them on for a published build.
 > who looks — it is public by design (§2), so this is fine, but do not put a real secret in the
 > bundle and assume minification protects it.
 
-**Two READMEs.** `README.md` is the GitHub landing page (CI badge, contributor pointers). `README.npm.md` is the product page shipped to npm *and* the marketplace `.vsix` — no CI badge, no contributor notes. The swap happens in the ephemeral runner (and the extension `package` script): `cp README.npm.md README.md` right before publish/package. The committed `README.md` is never touched.
+**Two READMEs.** `README.md` is the GitHub landing page (CI badge, contributor pointers). `npm-readme.md` is the product page shipped to npm *and* the marketplace `.vsix` — no CI badge, no contributor notes. The swap happens in the ephemeral runner (and the extension `package` script): `cp npm-readme.md README.md` right before publish/package. The committed `README.md` is never touched.
 
 No marketplace account is needed; the `.vsix` rides inside the npm tarball.
 

@@ -1,15 +1,10 @@
-```
-    ____                     _    __           _
-   / __ \___  ___  ____     | |  / /___ ______(_)___ _____  ________
-  / / / / _ \/ _ \/ __ \    | | / / __ `/ ___/ / __ `/ __ \/ ___/ _ \
- / /_/ /  __/  __/ /_/ /    | |/ / /_/ / /  / / /_/ / / / / /__/  __/
-/_____/\___/\___/ .___/     |___/\__,_/_/  /_/\__,_/_/ /_/\___/\___/
-               /_/
-```
+<p align="center">
+  <img src="https://raw.githubusercontent.com/deepvariance/vscode-extension/main/assets/banner.png" alt="Deep Variance" width="360">
+</p>
 
-<h1 align="center">Deep Variance — Optimized Inference API for Coding</h1>
-
-<p align="center"><em>VS Code integration</em></p>
+<p align="center">
+  <strong>Optimized Inference API for Coding</strong> &nbsp;·&nbsp; VS Code integration
+</p>
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@deepvariance/vscode"><img alt="npm" src="https://img.shields.io/npm/v/%40deepvariance%2Fvscode?color=cb3837&logo=npm"></a>
