@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/banner.png" alt="Deep Variance" width="360">
+  <img src="https://raw.githubusercontent.com/deepvariance/vscode-extension/main/assets/banner.png" alt="Deep Variance" width="360">
 </p>
 
 <p align="center">
@@ -7,8 +7,8 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/deepvariance/vscode-extension/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/deepvariance/vscode-extension/actions/workflows/ci.yml/badge.svg"></a>
   <a href="https://www.npmjs.com/package/@deepvariance/vscode"><img alt="npm" src="https://img.shields.io/npm/v/%40deepvariance%2Fvscode?color=cb3837&logo=npm"></a>
+  <a href="https://github.com/deepvariance/vscode-extension/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/deepvariance/vscode-extension/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="beta" src="https://img.shields.io/badge/status-beta-orange">
   <img alt="vscode" src="https://img.shields.io/badge/VS%20Code-1.104+-007ACC?logo=visualstudiocode&logoColor=white">
 </p>
@@ -55,11 +55,10 @@ npx @deepvariance/vscode --health   # is the server up?
 | `--yes` | Don't ask anything |
 | `--health` | Check the server and exit |
 
-## Building on this?
+## Contributing
 
-**[SPEC.md](./SPEC.md)** is the single source of truth: the gateway contract, the VS Code constraints
-that rule out the obvious designs, a change recipe per kind of edit, and a bug ledger. Contribution
-workflow is in **[CLAUDE.md](./CLAUDE.md)** — every change goes on a branch and lands via reviewed PR.
+Architecture, the gateway contract, and a change recipe per edit live in **[SPEC.md](./SPEC.md)**.
+Workflow is in **[CLAUDE.md](./CLAUDE.md)** — every change goes on a branch and lands via reviewed PR.
 
 ---
 
