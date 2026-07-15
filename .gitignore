@@ -7,3 +7,4 @@ extension/README.md
 .claude/
 skills-lock.json
 extension/LICENSE
+*.tgz
