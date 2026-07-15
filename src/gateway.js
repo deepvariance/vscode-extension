@@ -94,7 +94,9 @@ export async function register({ gateway, email, invite, fetchImpl = fetch }) {
     throw new Error(`${url} returned a non-JSON response: ${truncate(raw)}`);
   }
 
-  if (!body.api_key) {
+  // Guard the whole body: JSON.parse can return null or a primitive, and `.api_key` on those throws
+  // a raw TypeError at this trust boundary instead of the intended message.
+  if (!body || typeof body !== 'object' || !body.api_key) {
     throw new Error(`${url} responded without an api_key: ${truncate(raw)}`);
   }
 

@@ -29,17 +29,24 @@ const HELP = `
     DEEPVARIANCE_EMAIL, DEEPVARIANCE_INVITE, DEEPVARIANCE_GATEWAY
 `;
 
-const { values } = parseArgs({
-  options: {
-    health: { type: 'boolean', default: false },
-    email: { type: 'string' },
-    invite: { type: 'string' },
-    gateway: { type: 'string' },
-    yes: { type: 'boolean', default: false },
-    help: { type: 'boolean', default: false },
-  },
-  strict: true,
-});
+let values;
+try {
+  ({ values } = parseArgs({
+    options: {
+      health: { type: 'boolean', default: false },
+      email: { type: 'string' },
+      invite: { type: 'string' },
+      gateway: { type: 'string' },
+      yes: { type: 'boolean', default: false },
+      help: { type: 'boolean', default: false },
+    },
+    strict: true,
+  }));
+} catch (error) {
+  // A bad flag should print a clear message and the help, not a raw Node stack trace.
+  console.error(`${error.message}\n${HELP}`);
+  process.exit(1);
+}
 
 if (values.help) {
   console.log(HELP);
@@ -104,9 +111,16 @@ async function main() {
           }),
         );
 
+  // --yes (and any non-TTY, e.g. CI) means don't prompt. @clack's text() never resolves without a
+  // TTY, so without this guard `npx … --yes` with no email would hang forever.
+  const givenEmail = values.email ?? process.env.DEEPVARIANCE_EMAIL;
+  if (!givenEmail && (values.yes || !process.stdin.isTTY)) {
+    cancel('No email address. Pass --email or set DEEPVARIANCE_EMAIL.');
+    process.exit(1);
+  }
+
   const email = required(
-    values.email ??
-      process.env.DEEPVARIANCE_EMAIL ??
+    givenEmail ??
       (await text({
         message: 'Your email address',
         placeholder: 'you@example.com',

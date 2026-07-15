@@ -316,7 +316,7 @@ extension/
   package.json              contributes.languageModelChatProviders + enabledApiProposals
   src/constants.js          VENDOR + a re-export of src/model.js (one definition, no drift)
   src/provider.js           The LM provider: message translation, SSE, tools, thinking
-  src/extension.js          activate(): consume handoff, register provider, setup command
+  src/extension.js          activate(): consume handoff, register provider, setup + sign-out commands
   src/test-entry.js         Re-exports internals so tests run against the BUILT bundle
   esbuild.mjs               ESM sources → one CJS file (VS Code loads extensions via require)
   test/provider.test.js     Provider tests, with a stubbed `vscode` module
@@ -332,9 +332,9 @@ install the provider with no marketplace account. Rebuild it whenever `extension
 ## 6. Commands
 
 ```bash
-npm test                      # CLI tests (18)
+npm test                      # CLI tests (21)
 npm run build:extension       # rebuild + repackage the bundled .vsix  ← after ANY extension/ change
-cd extension && npm test      # provider tests (9), run against the built bundle
+cd extension && npm test      # provider tests (12), run against the built bundle
 cd extension && npm run build # bundle only, no .vsix
 
 node bin/cli.js --help
@@ -467,7 +467,7 @@ back, minification or not. Don't turn them on for a published build.
 > who looks — it is public by design (§2), so this is fine, but do not put a real secret in the
 > bundle and assume minification protects it.
 
-**Two READMEs.** `README.md` is the GitHub landing page (CI badge, contributor pointers). `npm-readme.md` is the product page shipped to npm *and* the marketplace `.vsix` — no CI badge, no contributor notes. The swap happens in the ephemeral runner (and the extension `package` script): `cp npm-readme.md README.md` right before publish/package. The committed `README.md` is never touched.
+**One README.** A single committed `README.md` ships to GitHub, npm, and the marketplace `.vsix`. The banner uses an absolute `raw.githubusercontent` URL so it renders on all three (the repo is public). The extension `package` script and the CI `.vsix` step copy it into `extension/` before packaging (`cp ../README.md README.md`); nothing is swapped. (The old two-README `npm-readme.md` split was removed once the repo went public.)
 
 No marketplace account is needed; the `.vsix` rides inside the npm tarball.
 
@@ -544,8 +544,9 @@ never prompting, backup-before-overwrite.
 2. **`@deepvariance/opencode@0.2.1` is broken in production.** It pins
    `Qwen/Qwen3-VL-30B-A3B-Thinking`, which the gateway 404s. Every opencode tester is dead right now.
    Fix: send `qwen-coder`. (Owned by the gateway team, not this repo.)
-3. **Nothing is published to npm.** `npx @deepvariance/vscode` will not work for testers yet. This is
-   the only thing standing between the code and a tester using it.
+3. **Published.** `@deepvariance/vscode` is live on npm (v0.1.4+) via OIDC trusted publishing with
+   provenance; `npx @deepvariance/vscode` works for testers. Releases are automatic on a version bump
+   merged to `main`.
 4. **(Historical) Continue's built-in web search returned 401** — Continue's *own* free-trial proxy
    (`proxy-server-blue-…run.app/web`) fails with `"Error in Continue free trial server: … 401 Invalid
    API key"`. It never touches our gateway and **no config of ours can fix it.** Not our bug. A real

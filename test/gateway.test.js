@@ -106,3 +106,10 @@ test('register rejects a 200 that carries no api_key', async () => {
 
 
 
+
+test('register rejects a 2xx whose body is literally null (no raw TypeError)', async () => {
+  await assert.rejects(
+    register({ gateway: GATEWAY, email: 'a@b.com', invite: 'x', fetchImpl: stubFetch({ body: 'null' }) }),
+    /without an api_key/,
+  );
+});

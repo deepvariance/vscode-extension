@@ -77,7 +77,13 @@ export function toOpenAIMessages(messages) {
 
 function flattenToolResult(parts) {
   return (parts ?? [])
-    .map((part) => (part instanceof vscode.LanguageModelTextPart ? part.value : typeof part === 'string' ? part : JSON.stringify(part)))
+    .map((part) => {
+      if (part instanceof vscode.LanguageModelTextPart) return part.value;
+      if (typeof part === 'string') return part;
+      // A tool that returned an image would otherwise be JSON.stringified into a giant byte map.
+      if (isImage(part)) return '[tool returned an image]';
+      return JSON.stringify(part);
+    })
     .join('\n');
 }
 

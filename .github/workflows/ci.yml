@@ -52,6 +52,26 @@ jobs:
           test -f "$expected" || { echo "::error::$expected is missing — run 'npm run build:extension' and commit it"; exit 1; }
           echo "ok: $expected"
 
+      # Filename-matches-version is not enough: the committed bytes are what npx actually ships, so
+      # check them directly — exactly one vsix, no source leak, and the bundle is not stale vs source.
+      - name: The committed .vsix bytes are current and source-free
+        run: |
+          count=$(ls extension/*.vsix 2>/dev/null | wc -l | tr -d ' ')
+          if [ "$count" -ne 1 ]; then
+            echo "::error::expected exactly one committed .vsix, found $count — a stale one was left behind"; ls extension/*.vsix; exit 1
+          fi
+          version=$(node -p "require('./extension/package.json').version")
+          committed="extension/deepvariance-vscode-$version.vsix"
+          if unzip -l "$committed" | grep -qE 'src/|\.map'; then
+            echo "::error::the committed .vsix ships source or sourcemaps"; unzip -l "$committed"; exit 1
+          fi
+          (cd extension && npm run build)
+          unzip -p "$committed" extension/dist/extension.js > /tmp/committed-ext.js
+          if ! diff -q /tmp/committed-ext.js extension/dist/extension.js >/dev/null; then
+            echo "::error::the committed .vsix is stale — run 'npm run build:extension' and commit it"; exit 1
+          fi
+          echo "ok: committed .vsix matches source"
+
       - name: The npm tarball ships the .vsix
         run: npm pack --dry-run 2>&1 | grep -q '\.vsix' || { echo "::error::npm pack does not include the .vsix"; exit 1; }
 

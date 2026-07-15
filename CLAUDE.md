@@ -21,13 +21,16 @@ Branch prefixes: `fix/`, `feature/`, `change/`.
 ## Before opening a PR
 
 ```bash
-npm test                    # CLI (18)
-cd extension && npm test    # provider (11)
+npm test                    # CLI (21)
+cd extension && npm test    # provider (12)
 ```
 
 If you touched `extension/`, bump `extension/package.json` and rebuild the committed `.vsix`
-(`npm run build:extension`) — CI fails if it drifts, and VS Code won't reinstall an unchanged
-version. Releasing the CLI is a `version` bump in `package.json`; CI publishes it on merge to `main`.
+(`npm run build:extension`) — CI fails if the committed bytes drift from source, and VS Code won't
+reinstall an unchanged version. **Also bump the root `package.json` version**: the publish gate keys
+off the *root* version, so an extension-only change with no root bump ships nothing to npm and your
+provider work never reaches users. Releasing is a root `version` bump; CI publishes it on merge to
+`main`.
 
 ## The rest
 

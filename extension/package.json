@@ -1,8 +1,8 @@
 {
   "name": "deepvariance-vscode",
-  "displayName": "Deep Variance \u2014 Qwen3.5 27B",
+  "displayName": "Deep Variance — Qwen3.5 27B",
   "description": "Adds Qwen3.5 27B to VS Code's Chat model picker.",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "publisher": "deepvariance",
   "license": "MIT",
   "engines": {
