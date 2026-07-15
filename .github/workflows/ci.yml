@@ -76,7 +76,8 @@ jobs:
         run: |
           npm run build
           cp ../README.md README.md
-          npx vsce package --skip-license --out /tmp/check.vsix
+          cp ../LICENSE LICENSE
+          npx vsce package --out /tmp/check.vsix
           if unzip -l /tmp/check.vsix | grep -qE 'src/|\.map'; then
             echo "::error::source or sourcemaps leaked into the .vsix"; unzip -l /tmp/check.vsix; exit 1
           fi

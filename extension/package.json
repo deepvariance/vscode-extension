@@ -4,7 +4,7 @@
   "description": "Adds Qwen3.5 27B to VS Code's Chat model picker.",
   "version": "0.3.4",
   "publisher": "deepvariance",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "engines": {
     "vscode": "^1.104.0"
   },
@@ -39,7 +39,7 @@
   "scripts": {
     "build": "node esbuild.mjs",
     "test": "node --test test/*.test.js",
-    "package": "npm run build && cp ../README.md README.md && vsce package --skip-license"
+    "package": "npm run build && cp ../README.md README.md && cp ../LICENSE LICENSE && vsce package"
   },
   "devDependencies": {
     "@types/vscode": "^1.104.0",
