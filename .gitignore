@@ -6,3 +6,4 @@ extension/README.md
 .agents/
 .claude/
 skills-lock.json
+extension/LICENSE
