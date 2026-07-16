@@ -47,7 +47,7 @@ const vscodeStub = {
   },
   lm: { registerLanguageModelChatProvider: () => ({ dispose() {} }) },
   commands: { registerCommand: () => ({ dispose() {} }) },
-  window: {},
+  window: { showInformationMessage: async () => undefined },
   workspace: { getConfiguration: () => ({ inspect: () => undefined, update: async () => {} }) },
   ConfigurationTarget: { Global: 1, Workspace: 2, WorkspaceFolder: 3 },
   ProgressLocation: { Notification: 15 },
@@ -171,6 +171,95 @@ test('default model: no-op when the setting is absent (older VS Code)', async ()
   const cfg = fakeConfig(undefined);
   assert.equal(await ensureDefaultModel(cfg), false);
   assert.deepEqual(cfg.updates, [], 'update() would throw on an unregistered key');
+});
+
+/** Runs activate() against a temp HOME seeded with the given handoff; records what the user saw. */
+async function activateWithHandoff(handoff, { agentSettingsAreOff = true } = {}) {
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dv-handoff-'));
+  fs.mkdirSync(path.join(home, '.deepvariance'));
+  fs.writeFileSync(path.join(home, '.deepvariance', 'handoff.json'), JSON.stringify(handoff));
+
+  const realHome = process.env.HOME;
+  const realWindow = vscodeStub.window;
+  const realWorkspace = vscodeStub.workspace;
+  const realCommands = vscodeStub.commands;
+  const messages = [];
+  const executed = [];
+  const updated = [];
+
+  process.env.HOME = home;
+  vscodeStub.window = {
+    showInformationMessage: async (message, ...actions) => {
+      messages.push({ message, actions });
+      return actions[0]; // the user clicks the offered button
+    },
+  };
+  // Stable VS Code's real defaults: everything we manage is off/unset out of the box.
+  const DEFAULTS = {
+    byokUtilityModelDefault: 'none',
+    defaultModel: '',
+    'agentHost.enabled': false, // `quality !== "stable"` is false on stable
+    'agentHost.byokModels.enabled': false,
+  };
+
+  vscodeStub.workspace = {
+    getConfiguration: () => ({
+      inspect: (key) => (agentSettingsAreOff && key in DEFAULTS ? { defaultValue: DEFAULTS[key] } : undefined),
+      update: async (key, value) => updated.push({ key, value }),
+    }),
+  };
+  vscodeStub.commands = { registerCommand: () => ({ dispose() {} }), executeCommand: async (c) => executed.push(c) };
+
+  try {
+    await activate({
+      subscriptions: [],
+      secrets: { get: async () => 'sk-wh-x', store: async () => {}, delete: async () => {} },
+      globalState: { get: () => undefined, update: async () => {} },
+    });
+    return { messages, executed, updated, handoffGone: !fs.existsSync(path.join(home, '.deepvariance', 'handoff.json')) };
+  } finally {
+    process.env.HOME = realHome;
+    vscodeStub.window = realWindow;
+    vscodeStub.workspace = realWorkspace;
+    vscodeStub.commands = realCommands;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
+}
+
+test('handoff with agents:yes turns the agent window on and offers the reload it needs', async () => {
+  // The agent host only starts at window load, so settings written now need one more restart.
+  const { messages, executed, updated, handoffGone } = await activateWithHandoff({
+    apiKey: 'sk-wh-x',
+    gateway: 'https://demo.deepvariance.com',
+    email: 'a@b.com',
+    agents: true,
+  });
+
+  assert.ok(handoffGone, 'the plaintext key must not be left on disk');
+  assert.deepEqual(
+    updated.map((u) => u.key).sort(),
+    ['agentHost.byokModels.enabled', 'agentHost.enabled', 'byokUtilityModelDefault', 'defaultModel'],
+  );
+  assert.match(messages.at(-1).message, /Reload/, 'must tell them a reload is needed');
+  assert.deepEqual(messages.at(-1).actions, ['Reload Window']);
+  assert.deepEqual(executed, ['workbench.action.reloadWindow'], 'clicking it must actually reload');
+});
+
+test('handoff with agents:no leaves the agent window alone and does not nag about reloading', async () => {
+  const { messages, executed, updated } = await activateWithHandoff({
+    apiKey: 'sk-wh-x',
+    gateway: 'https://demo.deepvariance.com',
+    email: 'a@b.com',
+    agents: false,
+  });
+
+  assert.deepEqual(
+    updated.map((u) => u.key).sort(),
+    ['byokUtilityModelDefault', 'defaultModel'],
+    'a "no" must not touch chat.agentHost.*',
+  );
+  assert.deepEqual(executed, [], 'nothing to reload for');
+  assert.doesNotMatch(messages.at(-1).message, /Reload/);
 });
 
 test('activation resolves our models, so Agent Sessions can see them', async () => {

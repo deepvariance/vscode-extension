@@ -207,7 +207,13 @@ async function main() {
     log.warn(`${error.message}\nThe model will still work; you just won't see it think.`);
   }
 
-  note(`Quit and reopen ${editor.name}, then pick "${MODEL_NAME}" in the Chat model picker.`, 'You are set — no key to paste');
+  // A full restart, not a reload: argv.json is only read when Electron launches.
+  const ready = [
+    `Quit and reopen ${editor.name}.`,
+    `${MODEL_NAME} will be selected for you in Chat${agents ? ', and the agent window is turned on' : ''}.`,
+  ].join(' ');
+
+  note(ready, 'You are set — no key to paste');
 
   outro('Happy coding!');
 }

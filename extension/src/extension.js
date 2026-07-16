@@ -89,16 +89,31 @@ async function importHandoff(context, provider) {
 
   // Only when the CLI asked and the user said yes. Best-effort: a config write must not cost them
   // the key we just imported.
+  let turnedOnAgentWindow = false;
   if (handoff.agents) {
     try {
-      await ensureAgentWindow();
+      turnedOnAgentWindow = (await ensureAgentWindow()).length > 0;
     } catch {
       /* they can still turn it on by hand */
     }
   }
 
   provider.refresh();
-  vscode.window.showInformationMessage(`${MODEL_NAME} is ready — pick it in the Chat model picker.`);
+
+  // The agent host only starts when a window loads, so settings we just wrote don't take effect
+  // until the next one. Without this the tester quits, reopens, finds the agent window empty and
+  // reports it broken — the settings are right, they're just one restart early.
+  if (turnedOnAgentWindow) {
+    const RELOAD = 'Reload Window';
+    const choice = await vscode.window.showInformationMessage(
+      `${MODEL_NAME} is ready. Reload to finish turning on the agent window.`,
+      RELOAD,
+    );
+    if (choice === RELOAD) await vscode.commands.executeCommand('workbench.action.reloadWindow');
+    return true;
+  }
+
+  vscode.window.showInformationMessage(`${MODEL_NAME} is ready — it is now your default model in Chat.`);
   return true;
 }
 

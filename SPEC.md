@@ -41,7 +41,7 @@ Last verified: **2026-07-16**.
 | Extension (vsix) | **0.3.8** |
 | Min VS Code | `1.104` to install; agent-mode utility-model fix needs `1.128+` (§5.5) |
 | Facts verified on | VS Code 1.127–1.128 |
-| Tests | CLI **21** · provider **24** |
+| Tests | CLI **21** · provider **26** |
 | Invite (baked in) | `inv-PxPzaJVIrSdk7F4VeBUiC7X69_qx42Ij` — public by design (§4.4) |
 
 > When the gateway swaps models, this whole table can go stale at once — the served id changes and a
@@ -405,6 +405,24 @@ write them, and only the CLI can ask. The prompt is skipped on forks (`HAS_AGENT
 `chat.agentHost.*` doesn't exist. Guards as ever: skip absent settings, skip anything a user or
 policy already chose — an explicit `false` is an answer, not an omission.
 
+**The agent host only starts at window load, so turning it on needs one more reload.** Writing
+`chat.agentHost.enabled` during activation is too late for the window we're in: the host spawns at
+load, so it never starts, and the agent window is empty even though every setting is correct. On a
+clean machine the tester quits, reopens, looks, sees nothing and reports it broken. Measured:
+session `…164323` wrote the settings and had **no** `agenthost.log`; the reload right after
+(`…164341`) had one.
+
+**Fix:** `ensureAgentWindow` returns which keys it changed, and `importHandoff` offers
+`Reload Window` (running `workbench.action.reloadWindow`) only when it changed something — silent
+otherwise, so nobody gets nagged for nothing. This is why the CLI's own note says *quit and reopen*
+rather than *reload*: `argv.json` is only read when Electron launches, so the thinking view needs a
+full restart, while the agent host only needs a window load.
+
+**Verified on a clean slate (2026-07-16):** all four settings wiped + extension uninstalled + handoff
+cleared, then the real CLI path — settings written from nothing, key into SecretStorage, reload
+offered, and Qwen3.6 visible in the agent window. Unit tests passed this the whole time it was
+broken; only the wipe-and-rerun caught it. **Do that before claiming an agent-window change works.**
+
 **Being visible isn't being selected — `chat.defaultModel` decides what a new chat opens on.** Once
 resolved, our model is merely *available*; a tester still has to find it in the picker. VS Code
 matches `chat.defaultModel` against a model **id** or **family**, case-insensitively:
@@ -621,6 +639,25 @@ Re-verify capabilities live (§4.7) — they may not carry over. Log it in [Appe
 5. `cd extension && npm test`.
 Verify for real: `code --install-extension extension/*.vsix --force`, **fully quit and reopen** VS
 Code, send a Chat message.
+
+**Change anything that writes a VS Code setting** (`chat.defaultModel`, `chat.agentHost.*`,
+`chat.byokUtilityModelDefault`) — unit tests **cannot** catch the bugs here. They pass against a
+stubbed `inspect()` while the real thing is broken by ordering or by settings that were already on
+the machine. Run the clean-slate test, which is Girish's exact path:
+
+```bash
+# 1. wipe every setting we manage from ~/Library/Application Support/Code/User/settings.json
+#    (back it up first — it's JSONC: comments and trailing commas, so don't JSON.parse it)
+# 2. code --uninstall-extension deepvariance.deepvariance-vscode
+# 3. rm -f ~/.deepvariance/handoff.json
+npm run build && node dist/cli.js --yes --email you@example.com
+# 4. fully quit and reopen VS Code, click "Reload Window" when offered
+# 5. check: handoff gone; all four settings present; agenthost.log exists; model in the agent window
+```
+
+Two traps this catches and nothing else does: settings that only *look* set because they were already
+on your machine, and settings written too late in startup to take effect (§5.5). Verifying on the
+machine you developed on is how the agent window shipped broken twice.
 
 **Add a model capability (embeddings, autocomplete, …)** — `extension/src/provider.js` →
 `provideLanguageModelChatInformation()` returns `capabilities`. **Only claim what you've verified live
