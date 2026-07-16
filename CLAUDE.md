@@ -13,7 +13,7 @@ gh pr create --base main --fill
 ```
 
 **Why it matters here:** `main` is the release branch. A push to `main` runs the CI publish job and
-ships to npm via trusted publishing (see [SPEC.md](./SPEC.md#publish--release)). A direct commit is a
+ships to npm via trusted publishing (see [SPEC.md](./SPEC.md#7-release--publishing)). A direct commit is a
 release with no review gate.
 
 Branch prefixes: `fix/`, `feature/`, `change/`.
