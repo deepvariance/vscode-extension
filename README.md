@@ -19,8 +19,8 @@
 npx @deepvariance/vscode
 ```
 
-Enter your email — no API key to copy, no config files to edit. Then, in VS Code, open the Command
-Palette and run **Developer: Reload Window**. Open Chat and pick the model from the list.
+Enter your email — no API key to copy, no config files to edit. Then quit and reopen VS Code: Qwen3.6
+is already selected in Chat.
 
 ## Models
 
@@ -34,30 +34,15 @@ Palette and run **Developer: Reload Window**. Open Chat and pick the model from 
 - **Tool use** — works in Chat's agent mode, so it can read and edit your code
 - **Vision** — attach a screenshot, a diagram, or an error dialog (up to 4 images)
 
-## Requirements
-
-- VS Code 1.104 or newer (see the table below)
-- Node.js 18 or newer, with npm (for `npx`)
-
-## IDEs supported
+## IDEs
 
 | IDE | Min version | What's supported |
 |---|---|---|
-| **VS Code** | **1.128** | Everything: Chat, agent mode, the agent window, and Qwen3.6 as your default model. **This is what we test on.** |
-| VS Code | 1.127 | Chat, agent mode, default model. No agent window. |
-| VS Code | 1.126 | Chat and agent mode. Agent mode needs `chat.byokUtilityModelDefault` set to `mainAgent` by hand. |
-| VS Code | 1.104 | Chat and the model picker only. |
-| VS Code Insiders | 1.128 | Same as VS Code — the agent window is already on by default here. |
-| Cursor, Windsurf, VSCodium | — | **Unverified.** The extension installs, but see below. |
+| VS Code | 1.128 | Everything — what we test on |
+| VS Code | 1.104 | Chat only; agent window needs 1.128 |
+| Cursor, Windsurf, VSCodium | — | Unverified |
 
-Each row is the floor for that feature. VS Code adds these settings over time, so an older editor
-isn't broken — it just has fewer of the pieces, and the extension skips whatever isn't there.
-
-**On forks:** Cursor's base is VS Code 1.105 and it replaces VS Code's Chat with its own, so
-`chat.defaultModel`, `chat.byokUtilityModelDefault` and `chat.agentHost.*` don't exist there at all —
-the agent window and the default-model setting cannot work. The extension installs and skips them
-cleanly rather than erroring. Whether the model reaches Cursor's own chat UI is **untested**; if you
-try it, tell us what happened. Windsurf and VSCodium are untested too.
+Also needs Node.js 18+ with npm, for `npx`.
 
 ## Options
 
