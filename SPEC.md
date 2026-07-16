@@ -41,7 +41,7 @@ Last verified: **2026-07-16**.
 | Extension (vsix) | **0.3.8** |
 | Min VS Code | `1.104` to install; agent-mode utility-model fix needs `1.128+` (§5.5) |
 | Facts verified on | VS Code 1.127–1.128 |
-| Tests | CLI **21** · provider **16** |
+| Tests | CLI **21** · provider **24** |
 | Invite (baked in) | `inv-PxPzaJVIrSdk7F4VeBUiC7X69_qx42Ij` — public by design (§4.4) |
 
 > When the gateway swaps models, this whole table can go stale at once — the served id changes and a
@@ -382,6 +382,47 @@ a no-op** — the renderer auto-assigns it (`isBYOK: !isCopilotExtension`), so e
 provider is already BYOK. And the **`chatProvider` API proposal is not needed**. Neither changes
 anything; the gate was always cache population.
 
+**The agent window is experimental and OFF by default on stable — both settings are required.** Even
+once resolved (above), a BYOK model reaches the agent host only if *both* of these are true, and
+neither is on a stable build:
+
+```js
+[Fg] : {type:"boolean", default: !isWeb && quality !== "stable", tags:["experimental","advanced"]}  // chat.agentHost.enabled
+[R$t]: {type:"boolean", default: !1,                             tags:["experimental","advanced"]}  // chat.agentHost.byokModels.enabled
+… this._configurationService.getValue(R$t) === !0 …   // strict: an unset value is a no
+```
+
+`quality !== "stable"` is **false** on stable VS Code, so `chat.agentHost.enabled` is on by default
+only in Insiders. This is why the agent window worked on one machine and not another: the settings
+had been flipped by hand there.
+
+**Not applied silently — the CLI asks.** Unlike the utility-model fix (a bug fix for a hard error),
+this turns on two *experimental* editor features, which is the user's call. `bin/cli.js` asks
+`Turn on the <editor> agent window for <model>?` with `initialValue: true`; `--yes` and any non-TTY
+take that default rather than hanging. The answer rides the handoff file as `agents`, and
+`ensureAgentWindow` in `extension.js` applies it — settings are VS Code's, so only the extension can
+write them, and only the CLI can ask. The prompt is skipped on forks (`HAS_AGENT_WINDOW`), where
+`chat.agentHost.*` doesn't exist. Guards as ever: skip absent settings, skip anything a user or
+policy already chose — an explicit `false` is an answer, not an omission.
+
+**Being visible isn't being selected — `chat.defaultModel` decides what a new chat opens on.** Once
+resolved, our model is merely *available*; a tester still has to find it in the picker. VS Code
+matches `chat.defaultModel` against a model **id** or **family**, case-insensitively:
+
+```js
+let t = o.find(n => n.metadata.id?.trim().toLowerCase() === e);       // id  -> Qwen/Qwen3.6-27B-FP8
+if (t) return t;
+let i = o.filter(n => n.metadata.family?.trim().toLowerCase() === e); // family -> qwen3.6 (highest version wins)
+```
+
+**Applied for the user:** `ensureDefaultModel` in `extension.js` writes `MODEL_ID` — the same constant
+the provider registers with, so the setting and the model can't drift. VS Code itself only applies it
+to an empty session and never over an explicit user pick
+(`_applyConfiguredDefaultForEmptySession`), so the blast radius is "which model a fresh chat opens
+with". Guarded like `ensureByokUtilityDefault`: skip if the setting is absent, and only fill the empty
+default — never overwrite a user value **or an enterprise policy** (`chat.defaultModel` has one:
+`ChatDefaultModel`, 1.127+).
+
 ---
 
 ## 6. Working in the repo
@@ -623,6 +664,14 @@ that target's file (back up before writing); guard with a `wants<Target>` flag; 
 
 ### Assumptions (correct these rather than silently inherit them)
 
+1. ~~Forks are equivalent to VS Code.~~ **Wrong, measured 2026-07-16.** Cursor's base is VS Code
+   **1.105.1**: `registerLanguageModelChatProvider` exists, but `chat.defaultModel`,
+   `chat.byokUtilityModelDefault`, `chat.agentHost.*` and `LanguageModelThinkingPart` are all absent,
+   and VS Code's model picker (`chatModelPinned`, `chatModelRecentlyUsed`) is gone — Cursor ships its
+   own chat. So the agent window, the default model and the thinking view **cannot** work there; our
+   guards skip them rather than erroring. Whether the model reaches Cursor's own chat UI is
+   **untested** — it needs a key in Cursor's SecretStorage and a human looking at the picker. See the
+   support matrix in the README. Windsurf/VSCodium untested.
 1. Testers are on VS Code. Forks (Cursor, Windsurf, VSCodium, Insiders) are detected and the VSIX
    installs into them, but the provider is only verified on VS Code proper.
 2. The gateway stays OpenAI-compatible. It does **not** keep a stable model id or alias — it has swapped
@@ -703,4 +752,4 @@ or a comment.
 | 0.1.5 | Review follow-ups (Windows quoting, `--yes` hang, null-body, etc.) | bugs found in a full review |
 | 0.1.6 | Gateway swap → `Qwen/Qwen3.6-27B-FP8`; **`qwen-coder` alias removed** | published extension was 404ing every chat |
 | 0.1.7 | Auto-set `chat.byokUtilityModelDefault: mainAgent` on activation | agent mode errored out of the box for every BYOK tester |
-| 0.1.8 | Fire `onDidChange` on activation (extension 0.3.8) | Agent Sessions only offered "Auto" — our model was never resolved into VS Code's cache |
+| 0.1.8 | Fire `onDidChange` on activation; set `chat.defaultModel`; ask before turning on the agent window (extension 0.3.8) | Agent Sessions only offered "Auto" — our model was never resolved into VS Code's cache — testers then had to hunt for it in the picker, and the agent window needs two experimental settings nobody had |

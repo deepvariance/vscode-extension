@@ -13,9 +13,11 @@ export function handoffPath(home = homedir()) {
   return join(home, '.deepvariance', 'handoff.json');
 }
 
-export async function writeHandoff({ apiKey, gateway, email, path = handoffPath() }) {
+export async function writeHandoff({ apiKey, gateway, email, agents = false, path = handoffPath() }) {
   await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-  await writeFile(path, `${JSON.stringify({ apiKey, gateway, email }, null, 2)}\n`, { mode: 0o600 });
+  // `agents` carries the CLI's answer about the agent window: those are VS Code settings, so only
+  // the extension can apply them, and only the CLI can ask.
+  await writeFile(path, `${JSON.stringify({ apiKey, gateway, email, agents }, null, 2)}\n`, { mode: 0o600 });
   return path;
 }
 

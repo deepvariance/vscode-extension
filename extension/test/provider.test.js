@@ -64,7 +64,8 @@ function load() {
   }
 }
 
-const { toOpenAIMessages, toOpenAITools, DeepVarianceProvider, ensureByokUtilityDefault, activate } = load();
+const { toOpenAIMessages, toOpenAITools, DeepVarianceProvider, ensureAgentWindow, ensureByokUtilityDefault, ensureDefaultModel, activate } =
+  load();
 const USER = 1;
 const ASSISTANT = 2;
 
@@ -94,6 +95,81 @@ test('byok utility: never overrides a value the user set', async () => {
 test('byok utility: no-op when the setting is absent (older VS Code)', async () => {
   const cfg = fakeConfig(undefined); // inspect() returns undefined -> setting not registered
   assert.equal(await ensureByokUtilityDefault(cfg), false);
+  assert.deepEqual(cfg.updates, [], 'update() would throw on an unregistered key');
+});
+
+/** Fake `chat` config keyed per setting, so the two agent-window keys can differ. */
+function fakeConfigByKey(inspectByKey) {
+  const updates = [];
+  return {
+    inspect: (key) => inspectByKey[key],
+    update: async (key, value, target) => updates.push({ key, value, target }),
+    updates,
+  };
+}
+
+test('agent window: turns on both settings, which are off by default on stable VS Code', async () => {
+  // A BYOK model reaches the agent host only when both are true; neither is by default on stable.
+  const cfg = fakeConfigByKey({
+    'agentHost.enabled': { defaultValue: false },
+    'agentHost.byokModels.enabled': { defaultValue: false },
+  });
+
+  assert.deepEqual(await ensureAgentWindow(cfg), ['agentHost.enabled', 'agentHost.byokModels.enabled']);
+  assert.deepEqual(cfg.updates, [
+    { key: 'agentHost.enabled', value: true, target: 1 },
+    { key: 'agentHost.byokModels.enabled', value: true, target: 1 },
+  ]);
+});
+
+test('agent window: leaves alone what is already on by default (Insiders)', async () => {
+  const cfg = fakeConfigByKey({
+    'agentHost.enabled': { defaultValue: true }, // Insiders: quality !== 'stable'
+    'agentHost.byokModels.enabled': { defaultValue: false },
+  });
+
+  assert.deepEqual(await ensureAgentWindow(cfg), ['agentHost.byokModels.enabled'], 'only the one that is actually off');
+});
+
+test('agent window: never overrides a user or policy choice', async () => {
+  const cfg = fakeConfigByKey({
+    'agentHost.enabled': { defaultValue: false, globalValue: false }, // user turned it off on purpose
+    'agentHost.byokModels.enabled': { defaultValue: false, policyValue: false },
+  });
+
+  assert.deepEqual(await ensureAgentWindow(cfg), []);
+  assert.deepEqual(cfg.updates, [], 'an explicit "off" is an answer, not an omission');
+});
+
+test('agent window: no-op where the settings do not exist (older VS Code, Cursor)', async () => {
+  // Cursor's base is VS Code 1.105 and has no chat.agentHost.* at all.
+  const cfg = fakeConfigByKey({});
+  assert.deepEqual(await ensureAgentWindow(cfg), []);
+  assert.deepEqual(cfg.updates, [], 'update() would throw on an unregistered key');
+});
+
+test('default model: fills the empty default so a new chat starts on our model', async () => {
+  const cfg = fakeConfig({ defaultValue: '', globalValue: undefined });
+  assert.equal(await ensureDefaultModel(cfg), true);
+  // VS Code matches this against the model id, case-insensitively — it must be the id we register.
+  assert.deepEqual(cfg.updates, [{ key: 'defaultModel', value: 'Qwen/Qwen3.6-27B-FP8', target: 1 }]);
+});
+
+test('default model: never overrides a model the user picked', async () => {
+  const cfg = fakeConfig({ defaultValue: '', globalValue: 'gpt-4o' });
+  assert.equal(await ensureDefaultModel(cfg), false);
+  assert.deepEqual(cfg.updates, [], 'must not touch a user-chosen model');
+});
+
+test('default model: never overrides an enterprise policy', async () => {
+  const cfg = fakeConfig({ defaultValue: '', policyValue: 'gpt-4o', globalValue: undefined });
+  assert.equal(await ensureDefaultModel(cfg), false);
+  assert.deepEqual(cfg.updates, [], 'policy wins; writing would be pointless or throw');
+});
+
+test('default model: no-op when the setting is absent (older VS Code)', async () => {
+  const cfg = fakeConfig(undefined);
+  assert.equal(await ensureDefaultModel(cfg), false);
   assert.deepEqual(cfg.updates, [], 'update() would throw on an unregistered key');
 });
 
