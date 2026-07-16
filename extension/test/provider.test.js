@@ -1,7 +1,10 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
 const Module = require('node:module');
+const os = require('node:os');
+const path = require('node:path');
 const { test } = require('node:test');
 
 /** The part classes VS Code hands a provider. The bundle uses `instanceof` against these. */
@@ -35,9 +38,12 @@ const vscodeStub = {
   LanguageModelChatToolMode: { Auto: 1, Required: 2 },
   EventEmitter: class {
     constructor() {
+      this.fired = 0;
       this.event = () => ({ dispose() {} });
     }
-    fire() {}
+    fire() {
+      this.fired++;
+    }
   },
   lm: { registerLanguageModelChatProvider: () => ({ dispose() {} }) },
   commands: { registerCommand: () => ({ dispose() {} }) },
@@ -58,7 +64,7 @@ function load() {
   }
 }
 
-const { toOpenAIMessages, toOpenAITools, DeepVarianceProvider, ensureByokUtilityDefault } = load();
+const { toOpenAIMessages, toOpenAITools, DeepVarianceProvider, ensureByokUtilityDefault, activate } = load();
 const USER = 1;
 const ASSISTANT = 2;
 
@@ -89,6 +95,38 @@ test('byok utility: no-op when the setting is absent (older VS Code)', async () 
   const cfg = fakeConfig(undefined); // inspect() returns undefined -> setting not registered
   assert.equal(await ensureByokUtilityDefault(cfg), false);
   assert.deepEqual(cfg.updates, [], 'update() would throw on an unregistered key');
+});
+
+test('activation resolves our models, so Agent Sessions can see them', async () => {
+  // Registering a provider does not populate VS Code's model cache — only resolving a vendor does,
+  // and the only triggers are the regular Chat picker or the provider's change event. The agent-host
+  // bridge behind Agent Sessions just reads that cache, so without this fire it finds nothing and
+  // offers only "Auto".
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'dv-activate-')); // keep the real handoff safe
+  const realHome = process.env.HOME;
+  const realRegister = vscodeStub.lm.registerLanguageModelChatProvider;
+  let registered;
+
+  process.env.HOME = home;
+  vscodeStub.lm.registerLanguageModelChatProvider = (vendor, provider) => {
+    registered = { vendor, provider };
+    return { dispose() {} };
+  };
+
+  try {
+    await activate({
+      subscriptions: [],
+      secrets: { get: async () => 'sk-wh-x', store: async () => {}, delete: async () => {} },
+      globalState: { get: () => undefined, update: async () => {} },
+    });
+
+    assert.equal(registered.vendor, 'deepvariance');
+    assert.ok(registered.provider._onDidChange.fired > 0, 'activate() must fire the change event or Agent Sessions only offers "Auto"');
+  } finally {
+    process.env.HOME = realHome;
+    vscodeStub.lm.registerLanguageModelChatProvider = realRegister;
+    fs.rmSync(home, { recursive: true, force: true });
+  }
 });
 
 test('a plain user turn becomes a plain string message', () => {

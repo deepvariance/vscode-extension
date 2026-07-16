@@ -29,7 +29,7 @@ a single spot to update. The appendices are **append-only logs** — add to them
 ## 1. Snapshot
 
 **Volatile facts — update this table in place; don't scatter these numbers through the prose.**
-Last verified: **2026-07-15**.
+Last verified: **2026-07-16**.
 
 | | |
 |---|---|
@@ -37,11 +37,11 @@ Last verified: **2026-07-15**.
 | Served model id | `Qwen/Qwen3.6-27B-FP8` — the exact id, **no alias** (see §4.5) |
 | Display name | `Qwen3.6 27B` |
 | Context window | `131072` (`max_model_len`) · max output 8192 · max **4 images/request** |
-| Published (npm) | `@deepvariance/vscode` **0.1.7** |
-| Extension (vsix) | **0.3.7** |
+| Published (npm) | `@deepvariance/vscode` **0.1.8** |
+| Extension (vsix) | **0.3.8** |
 | Min VS Code | `1.104` to install; agent-mode utility-model fix needs `1.128+` (§5.5) |
 | Facts verified on | VS Code 1.127–1.128 |
-| Tests | CLI **21** · provider **15** |
+| Tests | CLI **21** · provider **16** |
 | Invite (baked in) | `inv-PxPzaJVIrSdk7F4VeBUiC7X69_qx42Ij` — public by design (§4.4) |
 
 > When the gateway swaps models, this whole table can go stale at once — the served id changes and a
@@ -357,6 +357,30 @@ the agent "finishes" without acting. `tool_choice:"required"` works (constrained
 parser); `auto` (what agent mode uses) does not. **Fix is on the gateway:** `--tool-call-parser
 qwen3_coder`. A client-side fallback parser is possible but is a workaround for a server
 misconfiguration — prefer the gateway fix. Tracked in [Appendix A](#appendix-a--open-items).
+
+**Registering a provider does not publish a model — you must fire the change event.** Agent Sessions
+offered only "Auto" while the regular Chat picker showed Qwen3.6 fine. Cause: VS Code keeps a
+`_modelCache` and only fills it when a vendor is *resolved* (`_resolveAllLanguageModels` →
+`provideLanguageModelChatInformation`). Registering a provider does **not** resolve it; the only
+triggers are `selectLanguageModels()` — which the regular Chat picker calls, resolving every vendor —
+and the provider's own `onDidChange`. The agent-host bridge behind Agent Sessions
+(`AgentHostByokLmHandler.listModels`) only *reads* the cache:
+
+```js
+for (let i of this._languageModelsService.getLanguageModelIds())   // = Array.from(_modelCache.keys())
+  { let n = lookupLanguageModel(i); n?.isBYOK && !n.targetChatSessionType && t.push({...}) }
+```
+
+So on a fresh window nothing had ever resolved us, the cache had no entry, and the bridge logged
+`[Copilot] Found 1 models: Auto`. **Fix:** `provider.refresh()` unconditionally at the end of
+`activate()` — it fires `onDidChange`, VS Code resolves us, the cache fills, the bridge picks us up.
+Previously `refresh()` was only reached via `importHandoff`, which returns early on every startup
+after the first. Regression test: *"activation resolves our models, so Agent Sessions can see them."*
+
+Two dead ends ruled out along the way, so nobody re-tries them: **`isBYOK: true` in the model info is
+a no-op** — the renderer auto-assigns it (`isBYOK: !isCopilotExtension`), so every non-Copilot
+provider is already BYOK. And the **`chatProvider` API proposal is not needed**. Neither changes
+anything; the gate was always cache population.
 
 ---
 
@@ -679,3 +703,4 @@ or a comment.
 | 0.1.5 | Review follow-ups (Windows quoting, `--yes` hang, null-body, etc.) | bugs found in a full review |
 | 0.1.6 | Gateway swap → `Qwen/Qwen3.6-27B-FP8`; **`qwen-coder` alias removed** | published extension was 404ing every chat |
 | 0.1.7 | Auto-set `chat.byokUtilityModelDefault: mainAgent` on activation | agent mode errored out of the box for every BYOK tester |
+| 0.1.8 | Fire `onDidChange` on activation (extension 0.3.8) | Agent Sessions only offered "Auto" — our model was never resolved into VS Code's cache |

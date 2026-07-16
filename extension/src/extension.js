@@ -105,6 +105,13 @@ export async function activate(context) {
   }
 
   await importHandoff(context, provider);
+
+  // Registering a provider does not make VS Code ask it for models: it fills its model cache only
+  // when a vendor is *resolved*. Opening the regular Chat picker resolves every vendor, but the
+  // agent-host bridge behind Agent Sessions only reads that cache — so without a nudge our model is
+  // missing there until the regular picker happens to be opened first. Firing the change event is
+  // what triggers a resolve (see SPEC §5.5).
+  provider.refresh();
 }
 
 export function deactivate() {}
