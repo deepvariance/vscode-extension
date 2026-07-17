@@ -19,8 +19,8 @@
 npx @deepvariance/vscode
 ```
 
-Enter your email — no API key to copy, no config files to edit. Then, in VS Code, open the Command
-Palette and run **Developer: Reload Window**. Open Chat and pick the model from the list.
+Enter your email — no API key to copy, no config files to edit. Then quit and reopen VS Code: Qwen3.6
+is already selected in Chat.
 
 ## Models
 
@@ -34,10 +34,15 @@ Palette and run **Developer: Reload Window**. Open Chat and pick the model from 
 - **Tool use** — works in Chat's agent mode, so it can read and edit your code
 - **Vision** — attach a screenshot, a diagram, or an error dialog (up to 4 images)
 
-## Requirements
+## IDEs
 
-- VS Code 1.104 or newer — or a fork (Cursor, Windsurf, VSCodium, Insiders)
-- Node.js 18 or newer, with npm (for `npx`)
+| IDE | Min version | What's supported |
+|---|---|---|
+| VS Code | 1.128 | Everything — what we test on |
+| VS Code | 1.104 | Chat only; agent window needs 1.128 |
+| Cursor, Windsurf, VSCodium | — | Unverified |
+
+Also needs Node.js 18+ with npm, for `npx`.
 
 ## Options
 

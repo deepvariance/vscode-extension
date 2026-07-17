@@ -11,6 +11,12 @@ import { MODEL_NAME } from '../src/model.js';
 
 const PROVIDER_EXTENSION_ID = 'deepvariance.deepvariance-vscode';
 
+/**
+ * The agent window is a VS Code feature. Its settings don't exist in forks — Cursor's base is
+ * VS Code 1.105 and has no `chat.agentHost.*` at all — so don't offer it where it can't work.
+ */
+const HAS_AGENT_WINDOW = new Set(['code', 'code-insiders']);
+
 const HELP = `
   deepvariance-vscode — set up ${MODEL_NAME} in VS Code
 
@@ -144,6 +150,21 @@ async function main() {
     }
   }
 
+  // The agent window is experimental and off by default on stable VS Code, and a BYOK model needs
+  // two settings flipped before it shows up there at all. That's their editor to change, so ask —
+  // defaulting to yes, since running the model in agent mode is why most testers are here.
+  // --yes (and any non-TTY) takes that default rather than hanging on a prompt nobody can answer.
+  const agents =
+    HAS_AGENT_WINDOW.has(editor.bin) &&
+    (values.yes || !process.stdin.isTTY
+      ? true
+      : required(
+          await confirm({
+            message: `Turn on the ${editor.name} agent window for ${MODEL_NAME}?`,
+            initialValue: true,
+          }),
+        ));
+
   const s = spinner();
 
   s.start('Creating your personal API key');
@@ -169,7 +190,7 @@ async function main() {
     // The extension IS the model provider, so it stays installed. Only the key handoff is
     // transient: the extension moves it into SecretStorage and deletes the file.
     installVsix(editor.bin, vsixPath());
-    await writeHandoff({ apiKey, gateway, email });
+    await writeHandoff({ apiKey, gateway, email, agents });
     s.stop(`Installed the Deep Variance provider into ${editor.name}`);
   } catch (error) {
     s.stop('Could not install the Deep Variance provider', 1);
@@ -186,7 +207,13 @@ async function main() {
     log.warn(`${error.message}\nThe model will still work; you just won't see it think.`);
   }
 
-  note(`Quit and reopen ${editor.name}, then pick "${MODEL_NAME}" in the Chat model picker.`, 'You are set — no key to paste');
+  // A full restart, not a reload: argv.json is only read when Electron launches.
+  const ready = [
+    `Quit and reopen ${editor.name}.`,
+    `${MODEL_NAME} will be selected for you in Chat${agents ? ', and the agent window is turned on' : ''}.`,
+  ].join(' ');
+
+  note(ready, 'You are set — no key to paste');
 
   outro('Happy coding!');
 }
